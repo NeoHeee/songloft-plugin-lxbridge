@@ -16,11 +16,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Restore complete source
+        shell: bash
+        run: |
+          if compgen -G "bootstrap/remaining.b64.*" > /dev/null; then
+            mkdir -p /tmp/lx-bootstrap
+            : > /tmp/lx-bootstrap/remaining.zip
+            for file in bootstrap/remaining.b64.*; do
+              base64 -d "$file" >> /tmp/lx-bootstrap/remaining.zip
+            done
+            unzip -qo /tmp/lx-bootstrap/remaining.zip -d .
+            rm -rf bootstrap
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit -m "feat: import complete v0.1.14 source [skip ci]"
+              git push
+            fi
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies
         run: npm install

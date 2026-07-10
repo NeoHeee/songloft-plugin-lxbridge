@@ -1,0 +1,64 @@
+import type { HTTPRequest, HTTPResponse, SearchResultItem } from '@songloft/plugin-sdk';
+import { parseQuery } from '@songloft/plugin-sdk';
+import type { MusicInfo, PlatformId } from '../types';
+import { musicSdk } from '../musicSdk/facade';
+import type { RuntimeManager } from '../engine/manager';
+import { matchScore, searchAcross } from './search';
+import { parseJSONBody } from './request';
+import { errorMessage, fail, ok } from './response';
+
+function platform(value: unknown): PlatformId {
+  const id = String(value || '');
+  if (!['kw','kg','tx','wy','mg'].includes(id)) throw new Error(`无效平台: ${id}`);
+  return id as PlatformId;
+}
+
+function decodeSongInfo(encoded: string): MusicInfo {
+  try { return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as MusicInfo; }
+  catch { throw new Error('song_info 编码无效'); }
+}
+
+export function directHandlers(runtimeManager: RuntimeManager) {
+  return {
+    musicUrl: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const body = parseJSONBody<Record<string, any>>(req);
+        const songInfo = body.songInfo as MusicInfo;
+        const source = platform(songInfo?.source || body.source_id);
+        const result = await runtimeManager.getMusicUrl(source, songInfo, String(body.quality || '320k'));
+        return ok(result);
+      } catch (error) { return fail(errorMessage(error), 404); }
+    },
+
+    lyric: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const query = parseQuery(req.query);
+        const source = platform(query.source_id);
+        const songInfo = decodeSongInfo(query.song_info || '');
+        const result = await musicSdk[source].getLyric(songInfo);
+        return ok({ lyric: result.lyric, tlyric: result.tlyric || '', lxlyric: result.lxlyric || '' });
+      } catch (error) { return fail(errorMessage(error), 404); }
+    },
+
+    topone: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const body = parseJSONBody<Record<string, any>>(req);
+        const title = String(body.title || body.keyword || '').trim();
+        const artist = String(body.artist || '').trim();
+        const quality = String(body.quality || '320k');
+        if (!title) throw new Error('title/keyword is required');
+        const candidates = await searchAcross(`${title} ${artist}`.trim(), 1, 10, quality);
+        candidates.sort((a,b)=>matchScore(b,title,artist,body.duration)-matchScore(a,title,artist,body.duration));
+        const errors: string[]=[];
+        for (const item of candidates.slice(0,20)) {
+          try {
+            const sd=item.source_data; const source=platform(sd.platform); const songInfo=sd.songInfo as MusicInfo;
+            const resolved=await runtimeManager.getMusicUrl(source,songInfo,String(sd.quality||quality));
+            return ok({ ...item, url: resolved.url, headers: resolved.headers || {}, source_data: sd });
+          } catch (error) { errors.push(errorMessage(error)); }
+        }
+        throw new Error(errors[0] || '没有找到可播放结果');
+      } catch (error) { return fail(errorMessage(error), 404); }
+    },
+  };
+}
