@@ -1,0 +1,21 @@
+import type { MusicPlatform, MusicInfo } from '../../types';
+import { httpFetch } from '../request';
+import { arr, makeMusicInfo, normalizeCover, obj, page, staticSorts } from '../platform-common';
+
+const headers={Referer:'https://music.163.com/','User-Agent':'Mozilla/5.0'};
+function parseSong(raw:Record<string,any>):MusicInfo{const album=obj(raw.al||raw.album);return makeMusicInfo('wy',raw,{name:raw.name,singer:raw.ar||raw.artists,album:album.name,duration:raw.dt||raw.duration,cover:normalizeCover(album.picUrl||album.pic),songmid:raw.id,musicId:raw.id,albumId:album.id,extra:{types:[{type:'flac'},{type:'320k'},{type:'128k'}]}});}
+async function search(keyword:string,pageNo=1,limit=30){const offset=(pageNo-1)*limit;const {body,statusCode}=await httpFetch(`https://music.163.com/api/search/get/web?csrf_token=&s=${encodeURIComponent(keyword)}&type=1&offset=${offset}&total=true&limit=${limit}`,{headers}).promise;if(statusCode>=400)throw new Error(`网易云搜索失败: HTTP ${statusCode}`);const result=obj(obj(body).result);const rows=arr(result.songs);return page('wy',rows.map(x=>parseSong(obj(x))).filter(x=>x.name),pageNo,limit,Number(result.songCount||rows.length));}
+async function getLyric(song:MusicInfo){const id=song.musicId||song.songmid;if(!id)throw new Error('网易云歌曲缺少 id');const {body}=await httpFetch(`https://music.163.com/api/song/lyric?id=${encodeURIComponent(id)}&lv=-1&kv=-1&tv=-1`,{headers}).promise;const d=obj(body);return {lyric:String(obj(d.lrc).lyric||''),tlyric:String(obj(d.tlyric).lyric||''),raw:body};}
+async function playlistDetail(id:string){const {body}=await httpFetch(`https://music.163.com/api/v6/playlist/detail?id=${encodeURIComponent(id)}&n=100000&s=8`,{headers}).promise;const p=obj(obj(body).playlist||obj(body).result);const rows=arr(p.tracks);return {source:'wy',id,name:p.name||'',img:normalizeCover(p.coverImgUrl),description:p.description||'',total:Number(p.trackCount||rows.length),list:rows.map(x=>parseSong(obj(x)))};}
+const boards=[{id:'19723756',name:'飙升榜'},{id:'3779629',name:'新歌榜'},{id:'2884035',name:'原创榜'},{id:'3778678',name:'热歌榜'},{id:'991319590',name:'说唱榜'},{id:'71385702',name:'ACG榜'}];
+const wy:MusicPlatform={id:'wy',name:'网易云音乐',musicSearch:{search},getLyric,
+  songList:{
+    async tags(){const {body}=await httpFetch('https://music.163.com/api/playlist/catalogue',{headers}).promise;const d=obj(body);return {source:'wy',all:d.all||null,sub:arr(d.sub),categories:d.categories||{}};},
+    async list(params){const pageNo=Number(params.page||1),limit=Number(params.limit||30),offset=(pageNo-1)*limit;const cat=String(params.tag||'全部'),order=String(params.sort||'hot');const {body}=await httpFetch(`https://music.163.com/api/playlist/list?cat=${encodeURIComponent(cat)}&order=${encodeURIComponent(order)}&offset=${offset}&total=true&limit=${limit}`,{headers}).promise;const d=obj(body);const rows=arr(d.playlists);return {source:'wy',page:pageNo,limit,total:Number(d.total||rows.length),list:rows.map(x=>{const r=obj(x);return {id:String(r.id||''),name:String(r.name||''),img:normalizeCover(r.coverImgUrl),playCount:Number(r.playCount||0),creator:String(obj(r.creator).nickname||'')};})};},
+    async detail(id,pageNo=1,limit=100){const d=await playlistDetail(id) as Record<string,any>;const rows=arr(d.list);return {...d,page:pageNo,limit,list:rows.slice((pageNo-1)*limit,pageNo*limit)};},
+    async search(keyword,pageNo=1,limit=30){const offset=(pageNo-1)*limit;const {body}=await httpFetch(`https://music.163.com/api/search/get/web?csrf_token=&s=${encodeURIComponent(keyword)}&type=1000&offset=${offset}&total=true&limit=${limit}`,{headers}).promise;const d=obj(obj(body).result);return {source:'wy',page:pageNo,limit,total:Number(d.playlistCount||0),list:arr(d.playlists)};},
+    async sorts(){return staticSorts('wy');},
+  },
+  leaderboard:{async boards(){return {source:'wy',list:boards};},async list(id,pageNo=1,limit=100){const d=await playlistDetail(id) as Record<string,any>;const rows=arr(d.list);return {...d,page:pageNo,limit,list:rows.slice((pageNo-1)*limit,pageNo*limit)};}},
+};
+export default wy;

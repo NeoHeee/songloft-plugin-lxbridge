@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f7fb">
+  <title>洛雪音源 · Songloft</title>
+  <script>
+    (() => {
+      const path = location.pathname;
+      const staticIndex = path.search(/\/static(?:\/|$)/);
+      const pluginRoot = staticIndex >= 0
+        ? path.slice(0, staticIndex).replace(/\/$/, '')
+        : path.replace(/\/(?:index\.html)?$/, '').replace(/\/$/, '');
+      window.__LX_PLUGIN_ROOT__ = pluginRoot;
+      window.__LX_STATIC_ROOT__ = `${pluginRoot}/static`;
+
+      const theme = localStorage.getItem('lxmusic:theme') || 'system';
+      document.documentElement.dataset.themeMode = theme;
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+
+    })();
+  </script>
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M9 18V6.8l9-1.8v10.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="6.5" cy="18" r="2.5" fill="currentColor"/>
+              <circle cx="15.5" cy="15.2" r="2.5" fill="currentColor"/>
+              <path d="M4 5.5h2.6M5.3 4.2v2.6M18.5 19h2M19.5 18v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-row">
+              <h1>洛雪音源</h1>
+              <span class="version-badge">v0.1.14</span>
+            </div>
+            <p>五平台元数据检索 · 自定义音源播放解析 · 外部搜索接口</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="theme-picker" role="group" aria-label="界面主题">
+            <button class="theme-option" type="button" data-theme-choice="system" title="跟随系统">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              <span>自动</span>
+            </button>
+            <button class="theme-option" type="button" data-theme-choice="light" title="浅色模式">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>
+              <span>浅色</span>
+            </button>
+            <button class="theme-option" type="button" data-theme-choice="dark" title="深色模式">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 15.3A8.7 8.7 0 0 1 8.7 3.4 9 9 0 1 0 20.6 15.3Z"/></svg>
+              <span>深色</span>
+            </button>
+          </div>
+          <button id="refreshStatus" class="icon-button" type="button" title="刷新状态" aria-label="刷新状态">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8.5A7 7 0 0 1 18.7 7L20 12M4 12l1.3 5a7 7 0 0 0 12.6-1.5"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero-card" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <span class="eyebrow">SONGLOFT MUSIC SOURCE</span>
+          <h2 id="hero-title">把洛雪生态的音乐，带进你的私人音乐库</h2>
+          <p>搜索五个平台的歌曲元数据，通过你自行导入的音源脚本解析真实播放地址，并可通过外部接口对接第三方搜索调用。</p>
+        </div>
+        <div id="runtimeStatus" class="runtime-status is-offline" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div class="runtime-copy">
+            <strong class="runtime-title">未检测到可用音源</strong>
+            <p class="runtime-subtitle">搜索和歌词仍然可用</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="sourceWarning" class="banner warning hidden" role="status">
+        <div class="banner-icon" aria-hidden="true">!</div>
+        <div>
+          <strong>歌曲暂时无法解析播放地址</strong>
+          <p>目前没有已启用的音源脚本。你仍可搜索歌曲、浏览歌单并获取歌词。</p>
+        </div>
+        <button class="text-button warning-action" type="button" data-go-tab="sources">去导入音源</button>
+      </section>
+
+      <nav class="tabs" aria-label="功能切换">
+        <button class="tab active" type="button" data-tab="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span>搜索</span>
+        </button>
+        <button class="tab" type="button" data-tab="import">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+          <span>导入</span>
+          <span id="selectedCount" class="tab-count hidden">0</span>
+        </button>
+        <button class="tab" type="button" data-tab="sources">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/></svg>
+          <span>音源管理</span>
+        </button>
+        <button class="tab" type="button" data-tab="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2.5M12 18.5V21M4.8 7.8l1.8 1.8M17.4 14.4l1.8 1.8M3 12h2.5M18.5 12H21M4.8 16.2l1.8-1.8M17.4 9.6l1.8-1.8"/><circle cx="12" cy="12" r="3.5"/></svg>
+          <span>设置</span>
+        </button>
+      </nav>
+
+      <section id="tab-search" class="panel active">
+        <div class="card search-card">
+          <div class="section-heading search-heading">
+            <div>
+              <span class="section-kicker">跨平台检索</span>
+              <h2>搜索歌曲</h2>
+            </div>
+            <p>支持酷我、酷狗、QQ 音乐、网易云和咪咕，并可直接试听与导入。</p>
+          </div>
+
+          <div class="search-form">
+            <div class="field grow search-field">
+              <label for="keyword">关键词</label>
+              <div class="input-with-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input id="keyword" placeholder="输入歌曲名、歌手或专辑" autocomplete="off">
+              </div>
+            </div>
+            <div class="field">
+              <label for="platform">平台</label>
+              <select id="platform">
+                <option value="all">全部平台</option>
+                <option value="kw">酷我音乐</option>
+                <option value="kg">酷狗音乐</option>
+                <option value="tx">QQ 音乐</option>
+                <option value="wy">网易云音乐</option>
+                <option value="mg">咪咕音乐</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="quality">目标音质</label>
+              <select id="quality">
+                <option value="128k">标准 · 128K</option>
+                <option value="320k" selected>高品质 · 320K</option>
+                <option value="flac">无损 · FLAC</option>
+                <option value="flac24bit">Hi-Res</option>
+              </select>
+            </div>
+            <button id="searchButton" class="primary search-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <span>搜索</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="list-toolbar">
+          <div id="searchMeta" class="muted"></div>
+          <button id="selectAllResults" class="text-button hidden" type="button">全选结果</button>
+        </div>
+        <div id="results" class="result-list">
+          <div class="empty-state compact-empty">
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            </div>
+            <strong>开始搜索你的音乐</strong>
+            <p>输入歌曲或歌手名称，结果会显示在这里。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-import" class="panel">
+        <div class="card">
+          <div class="section-heading row between">
+            <div>
+              <span class="section-kicker">写入音乐库</span>
+              <h2>待导入歌曲</h2>
+              <p class="muted">在搜索结果中勾选歌曲后，会出现在这里。</p>
+            </div>
+            <button id="clearSelection" class="text-button" type="button">清空选择</button>
+          </div>
+
+          <div class="import-destination-note">
+            <strong>导入位置</strong>
+            <p>歌曲会先写入 Songloft 歌曲库；你还可以选择同时加入现有歌单，或新建一个歌单。</p>
+          </div>
+
+          <div class="import-options import-options-three">
+            <div class="field">
+              <label for="batchPlaylistTarget">同时加入歌单（可选）</label>
+              <select id="batchPlaylistTarget">
+                <option value="">仅导入 Songloft 歌曲库</option>
+                <option value="__new__">新建歌单…</option>
+              </select>
+              <small class="field-help">不选择歌单时，歌曲仍会出现在 Songloft 的全部歌曲中。</small>
+            </div>
+            <div id="batchNewPlaylistField" class="field hidden">
+              <label for="playlistName">新建歌单名称</label>
+              <input id="playlistName" placeholder="例如：洛雪收藏">
+            </div>
+            <label class="check-card">
+              <input id="fetchLyric" type="checkbox" checked>
+              <span class="check-mark"></span>
+              <span>
+                <strong>同时抓取歌词</strong>
+                <small>导入时调用对应平台的歌词接口</small>
+              </span>
+            </label>
+          </div>
+
+          <div id="importList" class="compact-list"></div>
+          <div class="actions">
+            <button id="importButton" class="primary" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+              <span>导入到 Songloft</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-sources" class="panel">
+        <div class="grid two source-actions-grid">
+          <div class="card action-card">
+            <div class="action-icon purple" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+            </div>
+            <div>
+              <span class="section-kicker">本地文件</span>
+              <h2>上传音源</h2>
+              <p class="muted">支持单个 .js，或包含多个 .js 的 .zip 文件。</p>
+            </div>
+            <label class="file-picker" for="sourceFile">
+              <span id="sourceFileLabel">选择 .js 或 .zip 文件</span>
+              <span class="file-picker-button">浏览</span>
+            </label>
+            <input id="sourceFile" class="visually-hidden" type="file" accept=".js,.zip,application/javascript,application/zip" multiple>
+            <button id="uploadSource" class="primary full" type="button">上传并初始化</button>
+          </div>
+
+          <div class="card action-card">
+            <div class="action-icon blue" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg>
+            </div>
+            <div>
+              <span class="section-kicker">远程直链</span>
+              <h2>从 URL 导入</h2>
+              <p class="muted">填入音源脚本或 ZIP 文件的公开直链地址。</p>
+            </div>
+            <div class="field">
+              <label for="sourceUrl">音源地址</label>
+              <input id="sourceUrl" placeholder="https://example.com/source.js">
+            </div>
+            <button id="importUrl" class="primary full" type="button">下载并初始化</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-heading row between">
+            <div>
+              <span class="section-kicker">运行时管理</span>
+              <h2>已导入音源</h2>
+              <p id="batchState" class="muted"></p>
+            </div>
+            <button id="refreshSources" class="secondary" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8.5A7 7 0 0 1 18.7 7L20 12M4 12l1.3 5a7 7 0 0 0 12.6-1.5"/></svg>
+              <span>刷新</span>
+            </button>
+          </div>
+          <div id="sourceList" class="source-list"></div>
+        </div>
+
+        <div class="disclaimer">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <p>插件本身不附带任何第三方音源。请仅导入可信脚本，并遵守相关平台服务条款及当地法律法规。</p>
+        </div>
+      </section>
+
+      <section id="tab-settings" class="panel">
+        <div class="settings-stack">
+          <div class="card">
+            <div class="section-heading settings-heading">
+              <div>
+                <span class="section-kicker">播放设置</span>
+                <h2>默认音质</h2>
+                <p class="muted">播放时优先尝试默认音质，若该音质不可用则由音源脚本返回错误或自行降级。</p>
+              </div>
+            </div>
+            <div class="settings-inline-row">
+              <div class="field grow">
+                <label for="defaultQualitySetting">默认音质</label>
+                <select id="defaultQualitySetting">
+                  <option value="128k">标准 · 128K</option>
+                  <option value="320k">高品质 · 320K</option>
+                  <option value="flac">无损 · FLAC</option>
+                  <option value="flac24bit">Hi-Res</option>
+                </select>
+              </div>
+              <button id="saveSettings" class="primary settings-save" type="button">保存</button>
+            </div>
+          </div>
+
+          <div class="card api-card">
+            <div class="section-heading settings-heading">
+              <div>
+                <span class="section-kicker">外部搜索接口</span>
+                <h2>标准化搜索与播放地址解析</h2>
+                <p class="muted">供第三方插件、自动化流程或其他系统调用。接口会搜索歌曲，并尽量返回可直接播放的地址。</p>
+              </div>
+            </div>
+
+            <div class="api-info-grid">
+              <div class="api-info-item">
+                <span>请求方式</span>
+                <strong>POST</strong>
+              </div>
+              <div class="api-info-item endpoint-item">
+                <span>接口地址</span>
+                <div class="endpoint-copy-row">
+                  <input id="externalEndpoint" class="endpoint-input" readonly>
+                  <button id="copyExternalEndpoint" class="secondary" type="button">复制</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="api-notice">
+              <strong>调用说明</strong>
+              <p>请求头使用 <code>Content-Type: application/json</code>。该接口已配置为公开路径，无需携带 Songloft 登录 Token；建议仅在可信局域网环境中使用。</p>
+            </div>
+
+            <details class="api-details" open>
+              <summary>请求 / 响应示例</summary>
+              <pre id="externalExample" class="code-block"></pre>
+            </details>
+
+            <div class="api-error-line">
+              <strong>错误码：</strong>
+              <span><code>0</code> 成功</span>
+              <span><code>400</code> 参数错误</span>
+              <span><code>404</code> 未找到</span>
+              <span><code>500</code> 服务或音源解析错误</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="importModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <span class="section-kicker">导入歌曲</span>
+            <h2 id="importModalTitle">导入到 Songloft 歌曲库</h2>
+          </div>
+          <button id="closeImportModal" class="icon-button modal-close" type="button" title="关闭" aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+
+        <div id="singleImportSong" class="modal-song-summary"></div>
+
+        <div class="modal-library-note">
+          <strong>歌曲将保存到 Songloft 歌曲库</strong>
+          <span>导入后可在 Songloft 的“全部歌曲”中找到；播放时由本插件实时解析地址。</span>
+        </div>
+
+        <div class="modal-form-grid">
+          <div class="field">
+            <label for="singlePlaylistTarget">同时加入歌单（可选）</label>
+            <select id="singlePlaylistTarget">
+              <option value="">仅导入 Songloft 歌曲库</option>
+              <option value="__new__">新建歌单…</option>
+            </select>
+          </div>
+          <div id="singleNewPlaylistField" class="field hidden">
+            <label for="singlePlaylistName">新建歌单名称</label>
+            <input id="singlePlaylistName" placeholder="例如：周杰伦精选">
+          </div>
+        </div>
+
+        <label class="check-card modal-check-card">
+          <input id="singleFetchLyric" type="checkbox" checked>
+          <span class="check-mark"></span>
+          <span>
+            <strong>同时抓取歌词</strong>
+            <small>歌词获取失败不会影响歌曲导入</small>
+          </span>
+        </label>
+
+        <div class="modal-actions">
+          <button id="cancelSingleImport" class="secondary" type="button">取消</button>
+          <button id="confirmSingleImport" class="primary" type="button">确认导入</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="playerDock" class="player-dock hidden">
+      <div class="player-copy">
+        <strong id="playerTitle">未在播放</strong>
+        <span id="playerMeta">点击搜索结果中的“播放”按钮即可试听。</span>
+      </div>
+      <audio id="previewAudio" controls preload="none"></audio>
+      <button id="closePlayer" class="icon-button player-close" type="button" title="关闭播放器" aria-label="关闭播放器">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="static/js/app.js"></script>
+</body>
+</html>
