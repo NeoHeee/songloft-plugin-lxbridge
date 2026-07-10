@@ -1,0 +1,6 @@
+Songloft LXMusic Plugin
+Copyright 2026 Neo
+
+Architecture and metadata-adapter behavior were informed by the public Songloft plugin toolchain,
+lx-music-desktop custom source API conventions, and XCQ0607/lxserver.
+No third-party source script is bundled with this project.

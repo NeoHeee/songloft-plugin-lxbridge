@@ -27,11 +27,11 @@
 
 ## 直接安装
 
-可在仓库中下载以下文件并通过 Songloft 插件管理页面安装：
+在仓库的 **Releases → v0.1.14** 中下载，并通过 Songloft 插件管理页面安装：
 
-- `releases/v0.1.14/lxmusic-v0.1.14.jsplugin.zip`：直接安装包
-- `releases/v0.1.14/lxmusic-v0.1.14.jsplugin.zip.sha256`：SHA-256 校验值
-- `releases/v0.1.14/songloft-plugin-lxmusic-v0.1.14-source.zip`：源码归档
+- `lxmusic-v0.1.14.jsplugin.zip`：直接安装包
+- `lxmusic-v0.1.14.jsplugin.zip.sha256`：SHA-256 校验值
+- `songloft-plugin-lxmusic-v0.1.14-source.zip`：源码归档
 
 当前版本：**v0.1.14**。
 

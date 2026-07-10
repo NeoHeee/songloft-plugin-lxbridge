@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/songloft-org/plugin-toolchain/main/schemas/plugin.schema.json",
+  "name": "洛雪音源",
+  "version": "0.1.14",
+  "description": "为 Songloft 接入洛雪音乐生态：五平台搜索、试听、导入与本地下载、自定义音源直链解析和外部搜索接口",
+  "author": "Neo",
+  "license": "Apache-2.0",
+  "entryPath": "lxmusic",
+  "main": "main.jsc",
+  "minHostVersion": "2.9.6",
+  "permissions": [
+    "storage",
+    "songs.read",
+    "songs.write",
+    "playlists.read",
+    "playlists.write",
+    "jsenv"
+  ],
+  "staticHash": true,
+  "download_url": "",
+  "icon": "icon.svg",
+  "publicPaths": [
+    "/external/search",
+    "/api/platforms"
+  ],
+  "entryHash": "0a1656dd296b996a825db2da1d18aa3e98e6076b0ed8097db73dab408c40767d",
+  "zipHash": "519b3565e02023552b04cc7ff21ff6a685c2f32b7bf14dd2bf2785e1857a8adc"
+}
