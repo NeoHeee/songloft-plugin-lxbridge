@@ -17,7 +17,7 @@
     "jsenv"
   ],
   "staticHash": true,
-  "download_url": "",
+  "download_url": "https://github.com/NeoHeee/songloft-plugin-lxmusic/releases/download/v0.1.14/lxmusic-v0.1.14.jsplugin.zip",
   "icon": "icon.svg",
   "publicPaths": [
     "/external/search",
