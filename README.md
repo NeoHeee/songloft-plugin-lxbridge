@@ -4,9 +4,20 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > 为兼容从 v0.1.x 原位升级，插件内部入口路径继续使用 `lxmusic`。这是兼容标识，不是未完成的项目更名。
 
+## v0.3.0
+
+当前稳定版本：`v0.3.0`。
+
+- 新增独立“下载管理”页面；
+- 分类查看全部、进行中、已完成和失败任务；
+- 显示歌曲、歌手、实际音质、文件大小、时间、状态和保存路径；
+- 失败任务支持重新加入队列；
+- 支持删除单条记录及批量清除已结束记录，不删除已下载文件；
+- 页面自动刷新进行中的任务状态。
+
 ## v0.2.1
 
-当前稳定版本：`v0.2.1`。
+
 
 - 下载前解析最终音频地址并探测真实文件大小；
 - 确认下载时显示实际音质、文件大小和媒体类型；
@@ -29,9 +40,9 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases) 下载：
 
-- `lxbridge-v0.2.1.jsplugin.zip`：安装包
-- `lxbridge-v0.2.1.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-lxbridge-v0.2.1-source.zip`：源码归档
+- `lxbridge-v0.3.0.jsplugin.zip`：安装包
+- `lxbridge-v0.3.0.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-lxbridge-v0.3.0-source.zip`：源码归档
 
 在 Songloft 插件管理页面上传安装包。管理页面仍位于：
 
@@ -85,7 +96,7 @@ npm run validate
 dist/lxmusic.jsplugin.zip
 ```
 
-构建器仍按稳定入口 `lxmusic` 生成内部包名；Release 会将其发布为 `lxbridge-v0.2.1.jsplugin.zip`。
+构建器仍按稳定入口 `lxmusic` 生成内部包名；Release 会将其发布为 `lxbridge-v0.3.0.jsplugin.zip`。
 
 ## 安全与免责声明
 
