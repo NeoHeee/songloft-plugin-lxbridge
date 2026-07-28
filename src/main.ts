@@ -60,6 +60,7 @@ router.put('/api/sources/toggle', sourceApi.toggle);
 router.get('/api/songlist/:action', async (req, params) => await songListHandler(req, params.action));
 router.get('/api/leaderboard/:action', async (req, params) => await leaderboardHandler(req, params.action));
 router.post('/api/direct/music/url', directApi.musicUrl);
+router.post('/api/direct/music/probe', directApi.musicProbe);
 router.get('/api/direct/lyric', directApi.lyric);
 router.post('/api/search/topone', directApi.topone);
 

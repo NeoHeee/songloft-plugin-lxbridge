@@ -18,6 +18,36 @@ function decodeSongInfo(encoded: string): MusicInfo {
   catch { throw new Error('song_info 编码无效'); }
 }
 
+function parseTotalBytes(headers: Headers): number | null {
+  const contentRange = headers.get('content-range') || '';
+  const rangeMatch = contentRange.match(/\/(\d+)\s*$/);
+  if (rangeMatch) {
+    const total = Number(rangeMatch[1]);
+    if (Number.isFinite(total) && total >= 0) return total;
+  }
+  const length = Number(headers.get('content-length'));
+  return Number.isFinite(length) && length >= 0 ? length : null;
+}
+
+async function probeAudio(url: string, requestHeaders: Record<string, string>) {
+  const inspect = async (method: 'HEAD' | 'GET', extraHeaders: Record<string, string> = {}) => {
+    const response = await fetch(url, { method, headers: { ...requestHeaders, ...extraHeaders }, redirect: 'follow' });
+    if (!response.ok && response.status !== 206) throw new Error(`音频服务器返回 HTTP ${response.status}`);
+    return {
+      total_bytes: parseTotalBytes(response.headers),
+      content_type: (response.headers.get('content-type') || '').split(';')[0],
+      accept_ranges: /bytes/i.test(response.headers.get('accept-ranges') || '') || response.status === 206,
+    };
+  };
+  try {
+    const head = await inspect('HEAD');
+    if (head.total_bytes != null) return head;
+  } catch {
+    // 部分音频服务器禁用 HEAD，继续用单字节 Range 请求探测。
+  }
+  return await inspect('GET', { Range: 'bytes=0-0' });
+}
+
 export function directHandlers(runtimeManager: RuntimeManager) {
   return {
     musicUrl: async (req: HTTPRequest): Promise<HTTPResponse> => {
@@ -27,6 +57,24 @@ export function directHandlers(runtimeManager: RuntimeManager) {
         const source = platform(songInfo?.source || body.source_id);
         const result = await runtimeManager.getMusicUrl(source, songInfo, String(body.quality || '320k'));
         return ok(result);
+      } catch (error) { return fail(errorMessage(error), 404); }
+    },
+
+    musicProbe: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const body = parseJSONBody<Record<string, any>>(req);
+        const songInfo = body.songInfo as MusicInfo;
+        const source = platform(songInfo?.source || body.source_id);
+        const requestedQuality = String(body.quality || '320k');
+        const resolved = await runtimeManager.getMusicUrl(source, songInfo, requestedQuality);
+        const headers = Object.fromEntries(Object.entries(resolved.headers || {}).map(([key, value]) => [key, String(value)]));
+        const file = await probeAudio(resolved.url, headers);
+        return ok({
+          ...file,
+          requested_quality: resolved.requestedQuality || requestedQuality,
+          actual_quality: resolved.actualQuality || requestedQuality,
+          downgraded: Boolean(resolved.downgraded),
+        });
       } catch (error) { return fail(errorMessage(error), 404); }
     },
 

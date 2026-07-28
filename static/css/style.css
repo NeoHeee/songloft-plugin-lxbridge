@@ -1107,6 +1107,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 /* v0.1.14 per-song download */
 .result-side { min-width: 226px; }
 .mini-button.download {
+  min-width: 88px;
+  white-space: nowrap;
   background: var(--green-soft);
   color: var(--green);
   border-color: color-mix(in srgb, var(--green) 28%, transparent);
