@@ -45,6 +45,8 @@ router.post('/api/music/url', createMusicUrlRoute(runtimeManager));
 router.post('/api/songs/import', importSongsHandler);
 router.post('/api/songs/download', downloadApi.create);
 router.get('/api/songs/download', downloadApi.status);
+router.post('/api/songs/download/retry', downloadApi.retry);
+router.delete('/api/songs/download', downloadApi.remove);
 router.get('/api/playlists', async () => {
   const playlists = await songloft.playlists.list();
   return jsonResponse({ code: 0, msg: 'success', data: { playlists } });
