@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.2.0</span>
+              <span class="version-badge">v0.3.0</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -102,6 +102,11 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
           <span>导入</span>
           <span id="selectedCount" class="tab-count hidden">0</span>
+        </button>
+        <button class="tab" type="button" data-tab="downloads">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+          <span>下载管理</span>
+          <span id="downloadCount" class="tab-count hidden">0</span>
         </button>
         <button class="tab" type="button" data-tab="sources">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/></svg>
@@ -220,6 +225,35 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
               <span>导入到 Songloft</span>
             </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-downloads" class="panel">
+        <div class="card">
+          <div class="section-heading row between download-heading">
+            <div>
+              <span class="section-kicker">后台任务</span>
+              <h2>下载管理</h2>
+              <p class="muted">集中查看进行中、已完成和失败的下载任务。</p>
+            </div>
+            <div class="download-toolbar">
+              <select id="downloadFilter" aria-label="筛选下载任务">
+                <option value="all">全部任务</option>
+                <option value="active">进行中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+              </select>
+              <button id="refreshDownloads" class="secondary" type="button">刷新</button>
+              <button id="clearFinishedDownloads" class="danger-button" type="button">清除已结束记录</button>
+            </div>
+          </div>
+          <div id="downloadSummary" class="download-summary"></div>
+          <div id="downloadList" class="download-list">
+            <div class="empty-state compact-empty">
+              <strong>暂无下载任务</strong>
+              <p>在搜索结果中点击“下载”，任务会显示在这里。</p>
+            </div>
           </div>
         </div>
       </section>
