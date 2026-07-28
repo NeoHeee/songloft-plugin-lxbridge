@@ -324,9 +324,9 @@
       const downloadLabel = downloadJob?.status === 'completed'
         ? '已下载'
         : downloadJob?.status === 'downloading'
-          ? '下载中'
+          ? `下载中${downloadJob.total_bytes != null ? ` · ${formatBytes(downloadJob.total_bytes)}` : ''}`
           : downloadJob?.status === 'queued'
-            ? '排队中'
+            ? `排队中${downloadJob.total_bytes != null ? ` · ${formatBytes(downloadJob.total_bytes)}` : ''}`
             : downloadJob?.status === 'failed'
               ? '重试'
               : '下载';
@@ -637,8 +637,36 @@
 
   function setDownloadJob(item, job) {
     const key = selectedKey(item);
-    state.downloadJobs[key] = job;
+    state.downloadJobs[key] = { ...(state.downloadJobs[key] || {}), ...job };
     renderResults();
+  }
+
+  function formatBytes(value) {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) return '大小未知';
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unit = -1;
+    do {
+      size /= 1024;
+      unit += 1;
+    } while (size >= 1024 && unit < units.length - 1);
+    return `${size >= 100 ? size.toFixed(0) : size >= 10 ? size.toFixed(1) : size.toFixed(2)} ${units[unit]}`;
+  }
+
+  async function probeDownload(item) {
+    const requestedQuality = String(item.source_data?.quality || $('quality').value || '320k');
+    const resp = await request('/api/direct/music/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_id: item.source_data?.platform,
+        songInfo: item.source_data?.songInfo,
+        quality: requestedQuality,
+      }),
+    });
+    return { requestedQuality, ...(resp.data || {}) };
   }
 
   function clearDownloadPoller(key) {
@@ -685,8 +713,29 @@
     const current = state.downloadJobs[key];
     if (current && ['queued', 'downloading', 'completed'].includes(current.status)) return;
 
-    setBusy(button, true, '准备中');
+    setBusy(button, true, '探测中');
     try {
+      let probe = null;
+      try {
+        probe = await probeDownload(item);
+      } catch (error) {
+        const proceed = window.confirm(`无法提前获取《${item.title}》的文件大小：${error.message}\n\n是否仍要继续下载？`);
+        if (!proceed) return;
+      }
+      if (probe) {
+        const actualQuality = probe.actual_quality || probe.requestedQuality;
+        item.source_data.quality = actualQuality;
+        const qualityLine = probe.downgraded
+          ? `${probe.requestedQuality} → ${actualQuality}（已自动降级）`
+          : actualQuality;
+        const sizeLine = probe.total_bytes == null ? '大小未知' : formatBytes(probe.total_bytes);
+        const typeLine = probe.content_type ? `\n格式：${probe.content_type}` : '';
+        const proceed = window.confirm(
+          `确认下载《${item.title}》？\n\n实际音质：${qualityLine}\n文件大小：${sizeLine}${typeLine}`,
+        );
+        if (!proceed) return;
+      }
+      setBusy(button, true, '准备中');
       const resp = await request('/api/songs/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -694,6 +743,11 @@
       });
       const job = resp.data?.job;
       if (!job?.id) throw new Error('未创建下载任务');
+      if (probe) {
+        job.total_bytes = probe.total_bytes;
+        job.actual_quality = probe.actual_quality || probe.requestedQuality;
+        job.content_type = probe.content_type || '';
+      }
       setDownloadJob(item, job);
       if (job.status === 'completed') {
         const message = job.already_downloaded
@@ -702,7 +756,8 @@
         toast(message, 6200);
         return;
       }
-      toast(`已将《${item.title}》加入下载队列，完成后会保存到 Songloft 音乐目录`, 4800);
+      const sizeText = probe?.total_bytes == null ? '' : `，文件大小 ${formatBytes(probe.total_bytes)}`;
+      toast(`已将《${item.title}》加入下载队列${sizeText}，完成后会保存到 Songloft 音乐目录`, 4800);
       pollDownload(item, job.id);
     } catch (error) {
       state.downloadJobs[key] = { status: 'failed', error: error.message };
