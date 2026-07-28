@@ -74,7 +74,7 @@ export function sourceHandlers(manager: SourceManager) {
         const originalUrl = String(body.url || '').trim();
         if (!/^https?:\/\//i.test(originalUrl)) throw new Error('url 必须是 http/https 地址');
         const url = normalizeRemoteSourceUrl(originalUrl);
-        const response = await fetch(url, { headers: { 'User-Agent': 'Songloft-LXMusic/0.1.14' } });
+        const response = await fetch(url, { headers: { 'User-Agent': 'Songloft-LxBridge/0.2.0' } });
         if (!response.ok) throw new Error(`下载失败: HTTP ${response.status}`);
 
         const contentType = getResponseHeader(response, 'content-type');
