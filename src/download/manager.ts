@@ -4,10 +4,14 @@ export interface DownloadJob {
   id: string;
   song_id: number;
   title: string;
+  artist?: string;
   status: DownloadJobStatus;
   path?: string;
   error?: string;
   already_downloaded?: boolean;
+  total_bytes?: number | null;
+  actual_quality?: string;
+  content_type?: string;
   created_at: number;
   updated_at: number;
 }
@@ -23,7 +27,7 @@ export class DownloadManager {
   private draining = false;
   private counter = 0;
 
-  enqueue(song: { id: number; title?: string; type?: string; file_path?: string }): DownloadJob {
+  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type'>> = {}): DownloadJob {
     if (!song.id) throw new Error('歌曲 ID 无效');
 
     if (song.type === 'local') {
@@ -31,7 +35,9 @@ export class DownloadManager {
         id: this.createId(song.id),
         song_id: song.id,
         title: song.title || '未知歌曲',
+        artist: song.artist || '',
         status: 'completed',
+        ...metadata,
         path: song.file_path || '',
         already_downloaded: true,
         created_at: Date.now(),
@@ -52,7 +58,9 @@ export class DownloadManager {
       id: this.createId(song.id),
       song_id: song.id,
       title: song.title || '未知歌曲',
+      artist: song.artist || '',
       status: 'queued',
+      ...metadata,
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -67,6 +75,42 @@ export class DownloadManager {
   get(id: string): DownloadJob | null {
     const job = this.jobs.get(id);
     return job ? { ...job } : null;
+  }
+
+  list(): DownloadJob[] {
+    this.cleanup();
+    return Array.from(this.jobs.values())
+      .sort((a, b) => b.created_at - a.created_at)
+      .map(job => ({ ...job }));
+  }
+
+  retry(id: string): DownloadJob {
+    const job = this.jobs.get(id);
+    if (!job) throw new Error('下载任务不存在或已过期');
+    if (job.status === 'queued' || job.status === 'downloading') return { ...job };
+    job.status = 'queued';
+    job.error = undefined;
+    job.path = undefined;
+    job.already_downloaded = false;
+    job.updated_at = Date.now();
+    this.activeBySong.set(job.song_id, job.id);
+    this.queue.push(job.id);
+    this.startDrain();
+    return { ...job };
+  }
+
+  remove(id: string): boolean {
+    const job = this.jobs.get(id);
+    if (!job || job.status === 'queued' || job.status === 'downloading') return false;
+    return this.jobs.delete(id);
+  }
+
+  clearFinished(): number {
+    let count = 0;
+    for (const job of Array.from(this.jobs.values())) {
+      if (job.status !== 'queued' && job.status !== 'downloading' && this.jobs.delete(job.id)) count += 1;
+    }
+    return count;
   }
 
   private createId(songId: number): string {
