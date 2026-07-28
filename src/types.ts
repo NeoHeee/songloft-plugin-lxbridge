@@ -72,6 +72,9 @@ export interface ResolvedUrl {
   url: string;
   headers?: Record<string, string>;
   runtimeId?: string;
+  requestedQuality?: string;
+  actualQuality?: string;
+  downgraded?: boolean;
 }
 
 export interface SourceMeta {
