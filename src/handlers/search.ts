@@ -146,6 +146,8 @@ async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchR
   const songInfo = sourceData.songInfo as MusicInfo | undefined;
   let url = '';
   let headers: Record<string, string> | undefined;
+  let actualQuality = quality;
+  let downgraded = false;
   let error = '';
 
   if (!isPlatform(platform) || !songInfo) {
@@ -161,6 +163,9 @@ async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchR
         url = resolved.url || '';
         headers = resolved.headers || undefined;
       }
+      actualQuality = resolved.actualQuality || quality;
+      downgraded = Boolean(resolved.downgraded);
+      sourceData.quality = actualQuality;
     } catch (err) {
       error = describeError(err);
     }
@@ -176,7 +181,10 @@ async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchR
     headers,
     source_data: sourceData,
     platform,
-    quality,
+    quality: actualQuality,
+    requested_quality: quality,
+    actual_quality: actualQuality,
+    downgraded,
     songInfo,
     ...(error ? { error } : {}),
   };
