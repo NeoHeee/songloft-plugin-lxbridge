@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/songloft-org/plugin-toolchain/main/schemas/plugin.schema.json",
-  "name": "洛雪音源",
-  "version": "0.1.14",
-  "description": "为 Songloft 接入洛雪音乐生态：五平台搜索、试听、导入与本地下载、自定义音源直链解析和外部搜索接口",
+  "name": "Songloft LxBridge",
+  "version": "0.2.0",
+  "description": "连接洛雪自定义音源与 Songloft：动态音质、扩展音质、自动降级、搜索、播放、导入、下载和外部搜索",
   "author": "Neo",
   "license": "Apache-2.0",
   "entryPath": "lxmusic",
@@ -17,7 +17,7 @@
     "jsenv"
   ],
   "staticHash": true,
-  "download_url": "https://github.com/NeoHeee/songloft-plugin-lxmusic/releases/download/v0.1.14/lxmusic-v0.1.14.jsplugin.zip",
+  "download_url": "https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/download/v0.2.0/lxbridge-v0.2.0.jsplugin.zip",
   "icon": "icon.svg",
   "publicPaths": [
     "/external/search",

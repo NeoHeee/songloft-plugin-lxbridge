@@ -1,7 +1,7 @@
 {
-  "name": "songloft-plugin-lxmusic",
-  "version": "0.1.14",
-  "description": "Songloft 洛雪音源插件：五平台元数据、歌曲试听导入与本地下载、外部搜索接口和自定义音源子 VM 解析",
+  "name": "songloft-plugin-lxbridge",
+  "version": "0.2.0",
+  "description": "Songloft LxBridge：连接洛雪自定义音源与 Songloft，支持动态音质、播放、导入、下载和外部搜索",
   "private": true,
   "scripts": {
     "build": "songloft-plugin build",

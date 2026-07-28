@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f6f7fb">
-  <title>洛雪音源 · Songloft</title>
+  <title>Songloft LxBridge</title>
   <script>
     (() => {
       const path = location.pathname;
@@ -39,10 +39,10 @@
           </div>
           <div class="brand-copy">
             <div class="brand-row">
-              <h1>洛雪音源</h1>
-              <span class="version-badge">v0.1.14</span>
+              <h1>Songloft LxBridge</h1>
+              <span class="version-badge">v0.2.0</span>
             </div>
-            <p>五平台元数据检索 · 自定义音源播放解析 · 外部搜索接口</p>
+            <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
         </div>
 
@@ -148,7 +148,9 @@
                 <option value="128k">标准 · 128K</option>
                 <option value="320k" selected>高品质 · 320K</option>
                 <option value="flac">无损 · FLAC</option>
-                <option value="flac24bit">Hi-Res</option>
+                <option value="flac24bit">Hi-Res 无损 · 24-Bit</option>
+                <option value="atmos">臻品音质</option>
+                <option value="master">臻品母带</option>
               </select>
             </div>
             <button id="searchButton" class="primary search-button" type="button">
@@ -286,7 +288,7 @@
               <div>
                 <span class="section-kicker">播放设置</span>
                 <h2>默认音质</h2>
-                <p class="muted">播放时优先尝试默认音质，若该音质不可用则由音源脚本返回错误或自行降级。</p>
+                <p class="muted">选项会根据已启用音源动态更新；目标音质不可用时，插件会自动逐级降级并提示实际音质。</p>
               </div>
             </div>
             <div class="settings-inline-row">
@@ -296,7 +298,9 @@
                   <option value="128k">标准 · 128K</option>
                   <option value="320k">高品质 · 320K</option>
                   <option value="flac">无损 · FLAC</option>
-                  <option value="flac24bit">Hi-Res</option>
+                  <option value="flac24bit">Hi-Res 无损 · 24-Bit</option>
+                  <option value="atmos">臻品音质</option>
+                  <option value="master">臻品母带</option>
                 </select>
               </div>
               <button id="saveSettings" class="primary settings-save" type="button">保存</button>

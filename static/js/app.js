@@ -18,6 +18,8 @@
     importItem: null,
     downloadJobs: {},
     downloadPollers: {},
+    qualityByPlatform: {},
+    legacyQualityPlatforms: new Set(),
   };
 
   const $ = id => document.getElementById(id);
@@ -25,10 +27,20 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[ch]));
   const platformNames = { kw: '酷我', kg: '酷狗', tx: 'QQ 音乐', wy: '网易云', mg: '咪咕' };
+  const qualityCatalog = [
+    { value: '128k', label: '标准 · 128K', common: true },
+    { value: '320k', label: '高品质 · 320K', common: true },
+    { value: 'flac', label: '无损 · FLAC', common: true },
+    { value: 'flac24bit', label: 'Hi-Res 无损 · 24-Bit', common: true },
+    { value: 'atmos', label: '臻品音质' },
+    { value: 'master', label: '臻品母带' },
+  ];
+  const qualityAliases = { hires: 'flac24bit', '24bit': 'flac24bit', '24-bit': 'flac24bit', lossless: 'flac', high: '320k', standard: '128k' };
+  const normalizeQuality = value => qualityAliases[String(value || '').trim().toLowerCase()] || String(value || '').trim().toLowerCase();
   const musicPlaceholder = '<span class="cover-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6.8l9-1.8v10.2"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="15.2" r="2.5"/></svg></span>';
 
   function defaultQuality() {
-    return localStorage.getItem('lxmusic:defaultQuality') || '320k';
+    return localStorage.getItem('lxbridge:defaultQuality') || localStorage.getItem('lxmusic:defaultQuality') || '320k';
   }
 
   function setTheme(mode) {
@@ -169,11 +181,62 @@
       : button.dataset.label;
   }
 
+  function availableQualities() {
+    const platform = $('platform')?.value || 'all';
+    const ids = platform === 'all' ? Object.keys(state.qualityByPlatform) : [platform];
+    const found = new Set();
+    let legacy = false;
+    ids.forEach(id => {
+      (state.qualityByPlatform[id] || []).forEach(value => found.add(normalizeQuality(value)));
+      if (state.legacyQualityPlatforms.has(id)) legacy = true;
+    });
+    if (legacy || !ids.length || !Object.keys(state.qualityByPlatform).length) {
+      qualityCatalog.filter(item => item.common).forEach(item => found.add(item.value));
+    }
+    return found;
+  }
+
+  function renderQualityOptions(preferred) {
+    const available = availableQualities();
+    const known = new Set(qualityCatalog.map(item => item.value));
+    const custom = Array.from(available).filter(value => value && !known.has(value)).sort();
+    const options = [
+      ...qualityCatalog.map(item => ({ ...item, supported: available.has(item.value) })),
+      ...custom.map(value => ({ value, label: `扩展音质 · ${value}`, supported: true })),
+    ];
+    for (const id of ['quality', 'defaultQualitySetting']) {
+      const select = $(id);
+      const current = normalizeQuality(preferred || select.value || defaultQuality());
+      select.innerHTML = options.map(item =>
+        `<option value="${escapeHtml(item.value)}"${item.supported ? '' : ' disabled'}>${escapeHtml(item.label)}${item.supported ? '' : ' · 当前音源不支持'}</option>`
+      ).join('');
+      const usable = options.filter(item => item.supported).map(item => item.value);
+      select.value = usable.includes(current) ? current : usable.includes('320k') ? '320k' : usable[0] || '320k';
+    }
+    updateExternalExample($('quality').value);
+  }
+
   function syncQualityControls(value) {
-    const normalized = ['128k', '320k', 'flac', 'flac24bit'].includes(value) ? value : '320k';
-    $('quality').value = normalized;
+    renderQualityOptions(normalizeQuality(value) || '320k');
+    const normalized = $('quality').value || '320k';
     $('defaultQualitySetting').value = normalized;
     updateExternalExample(normalized);
+  }
+
+  function updateQualityCapabilities(runtimeSources) {
+    state.qualityByPlatform = {};
+    state.legacyQualityPlatforms = new Set();
+    (runtimeSources || []).forEach(runtime => {
+      Object.entries(runtime.sources || {}).forEach(([platform, capability]) => {
+        const qualities = Array.isArray(capability?.qualitys) ? capability.qualitys.map(normalizeQuality).filter(Boolean) : [];
+        if (!state.qualityByPlatform[platform]) state.qualityByPlatform[platform] = [];
+        if (!qualities.length) state.legacyQualityPlatforms.add(platform);
+        qualities.forEach(value => {
+          if (!state.qualityByPlatform[platform].includes(value)) state.qualityByPlatform[platform].push(value);
+        });
+      });
+    });
+    renderQualityOptions($('quality')?.value || defaultQuality());
   }
 
   function activateTab(name) {
@@ -197,13 +260,15 @@
     status.classList.toggle('is-online', active > 0);
     status.classList.toggle('is-offline', active === 0);
     status.querySelector('.runtime-title').textContent = active > 0 ? `${active} 个音源正在运行` : '未检测到可用音源';
-    status.querySelector('.runtime-subtitle').textContent = active > 0 ? '歌曲播放地址可正常解析' : '搜索和歌词仍然可用';
+    status.querySelector('.runtime-subtitle').textContent = active > 0 ? '已动态读取音质能力，失败时自动降级' : '搜索和歌词仍然可用';
   }
 
   async function loadStatus() {
     try {
       const resp = await request('/api/status');
-      setRuntimeStatus(resp.data?.runtime_sources?.length || 0);
+      const runtimes = resp.data?.runtime_sources || [];
+      setRuntimeStatus(runtimes.length);
+      updateQualityCapabilities(runtimes);
     } catch (error) { toast(error.message); }
   }
 
@@ -354,6 +419,7 @@
       setBusy(button, false);
     }
   }
+  $('platform').addEventListener('change', () => renderQualityOptions($('quality').value));
   $('searchButton').addEventListener('click', search);
   $('keyword').addEventListener('keydown', event => { if (event.key === 'Enter') search(); });
 
@@ -667,18 +733,28 @@
 
     setBusy(button, true, '解析中');
     try {
-      const resp = await request('/api/music/url', {
+      const requestedQuality = String(item.source_data?.quality || $('quality').value || '320k');
+      const resp = await request('/api/direct/music/url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_data: item.source_data }),
+        body: JSON.stringify({
+          source_id: item.source_data?.platform,
+          songInfo: item.source_data?.songInfo,
+          quality: requestedQuality,
+        }),
       });
-      if (!resp?.url) throw new Error('未获取到可播放地址');
-      audio.src = resp.url;
+      const resolved = resp.data || {};
+      if (!resolved.url) throw new Error('未获取到可播放地址');
+      const actualQuality = resolved.actualQuality || requestedQuality;
+      item.source_data.quality = actualQuality;
+      audio.src = resolved.url;
       await audio.play();
       state.playingKey = key;
       state.playingItem = item;
-      updatePlayerDock(item, resp.url);
-      if (resp.headers && Object.keys(resp.headers).length) {
+      updatePlayerDock(item, resolved.url);
+      if (resolved.downgraded) {
+        toast(`目标音质 ${requestedQuality} 不可用，已自动降级为 ${actualQuality}`, 5200);
+      } else if (resolved.headers && Object.keys(resolved.headers).length) {
         toast('该歌曲解析时返回了自定义请求头，浏览器预览可能在少数情况下受限。', 4200);
       }
       renderResults();
@@ -891,7 +967,7 @@ curl -X POST "${endpoint}" \
   $('copyExternalEndpoint').addEventListener('click', () => copyText($('externalEndpoint').value));
   $('saveSettings').addEventListener('click', () => {
     const value = $('defaultQualitySetting').value || '320k';
-    localStorage.setItem('lxmusic:defaultQuality', value);
+    localStorage.setItem('lxbridge:defaultQuality', value);
     syncQualityControls(value);
     toast('默认音质已保存');
   });
