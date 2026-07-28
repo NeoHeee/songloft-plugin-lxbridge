@@ -79,16 +79,16 @@ function normalizeRequest(req: HTTPRequest): HTTPRequest {
 }
 
 async function onInit(): Promise<void> {
-  songloft.log.info('[lxmusic] initializing');
+  songloft.log.info('[lxbridge] initializing');
   await sourceManager.init();
   initialized = true;
-  songloft.log.info(`[lxmusic] initialized, ${runtimeManager.getStatus().length} source runtime(s) active`);
+  songloft.log.info(`[lxbridge] initialized, ${runtimeManager.getStatus().length} source runtime(s) active`);
 }
 
 async function onDeinit(): Promise<void> {
   initialized = false;
   await runtimeManager.destroyAll();
-  songloft.log.info('[lxmusic] deinitialized');
+  songloft.log.info('[lxbridge] deinitialized');
 }
 
 async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
@@ -104,7 +104,7 @@ async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
     };
   } catch (error) {
     const message = String((error as Error)?.message || error || 'unknown error');
-    songloft.log.error(`[lxmusic] HTTP error: ${message}`);
+    songloft.log.error(`[lxbridge] HTTP error: ${message}`);
     return jsonResponse({ code: 500, msg: message, data: null }, 500);
   }
 }
