@@ -68,7 +68,7 @@ jobs:
             -x '.git/*' 'node_modules/*' 'dist/*'
 
       - name: Create or update GitHub Release
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'agent/release-')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.release.outputs.version }}
