@@ -54,7 +54,15 @@ export function directHandlers(runtimeManager: RuntimeManager) {
           try {
             const sd=item.source_data; const source=platform(sd.platform); const songInfo=sd.songInfo as MusicInfo;
             const resolved=await runtimeManager.getMusicUrl(source,songInfo,String(sd.quality||quality));
-            return ok({ ...item, url: resolved.url, headers: resolved.headers || {}, source_data: sd });
+            return ok({
+              ...item,
+              url: resolved.url,
+              headers: resolved.headers || {},
+              requested_quality: resolved.requestedQuality || quality,
+              actual_quality: resolved.actualQuality || quality,
+              downgraded: Boolean(resolved.downgraded),
+              source_data: { ...sd, quality: resolved.actualQuality || sd.quality || quality },
+            });
           } catch (error) { errors.push(errorMessage(error)); }
         }
         throw new Error(errors[0] || '没有找到可播放结果');
