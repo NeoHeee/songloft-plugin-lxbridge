@@ -18,6 +18,8 @@
     importItem: null,
     downloadJobs: {},
     downloadPollers: {},
+    downloadTaskList: [],
+    downloadManagerTimer: 0,
     qualityByPlatform: {},
     legacyQualityPlatforms: new Set(),
   };
@@ -246,6 +248,7 @@
       renderImport();
       loadPlaylists();
     }
+    if (name === 'downloads') loadDownloads();
     if (name === 'sources') loadSources();
     if (name === 'settings') updateExternalExample($('defaultQualitySetting').value || defaultQuality());
   }
@@ -638,7 +641,11 @@
   function setDownloadJob(item, job) {
     const key = selectedKey(item);
     state.downloadJobs[key] = { ...(state.downloadJobs[key] || {}), ...job };
+    const index = state.downloadTaskList.findIndex(entry => entry.id === job.id);
+    if (index >= 0) state.downloadTaskList[index] = { ...state.downloadTaskList[index], ...job };
+    else state.downloadTaskList.unshift({ ...job });
     renderResults();
+    renderDownloads();
   }
 
   function formatBytes(value) {
@@ -653,6 +660,92 @@
       unit += 1;
     } while (size >= 1024 && unit < units.length - 1);
     return `${size >= 100 ? size.toFixed(0) : size >= 10 ? size.toFixed(1) : size.toFixed(2)} ${units[unit]}`;
+  }
+
+  function downloadStatusLabel(status) {
+    return { queued: '排队中', downloading: '下载中', completed: '已完成', failed: '失败' }[status] || status;
+  }
+
+  function renderDownloads() {
+    const list = $('downloadList');
+    if (!list) return;
+    const filter = $('downloadFilter')?.value || 'all';
+    const jobs = state.downloadTaskList.filter(job => {
+      if (filter === 'active') return job.status === 'queued' || job.status === 'downloading';
+      return filter === 'all' || job.status === filter;
+    });
+    const counts = state.downloadTaskList.reduce((result, job) => {
+      result.total += 1;
+      if (job.status === 'queued' || job.status === 'downloading') result.active += 1;
+      if (job.status === 'completed') result.completed += 1;
+      if (job.status === 'failed') result.failed += 1;
+      return result;
+    }, { total: 0, active: 0, completed: 0, failed: 0 });
+    $('downloadSummary').innerHTML = [
+      ['全部', counts.total], ['进行中', counts.active], ['已完成', counts.completed], ['失败', counts.failed],
+    ].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('');
+    $('downloadCount').textContent = String(counts.active);
+    $('downloadCount').classList.toggle('hidden', counts.active === 0);
+    if (!jobs.length) {
+      list.innerHTML = `<div class="empty-state compact-empty"><strong>没有符合条件的任务</strong><p>新的下载任务会自动显示在这里。</p></div>`;
+      return;
+    }
+    list.innerHTML = jobs.map(job => {
+      const details = [
+        job.artist || '',
+        job.actual_quality ? `音质 ${job.actual_quality}` : '',
+        job.total_bytes == null ? '大小未知' : formatBytes(job.total_bytes),
+        new Date(job.created_at).toLocaleString(),
+      ].filter(Boolean).map(escapeHtml).join(' · ');
+      const statusClass = `status-${escapeHtml(job.status)}`;
+      return `<article class="download-item">
+        <div class="download-main">
+          <div class="download-title-row">
+            <strong>${escapeHtml(job.title || '未知歌曲')}</strong>
+            <span class="download-status ${statusClass}">${escapeHtml(downloadStatusLabel(job.status))}</span>
+          </div>
+          <p>${details}</p>
+          ${job.error ? `<p class="download-error">${escapeHtml(job.error)}</p>` : ''}
+          ${job.path ? `<p class="download-path" title="${escapeHtml(job.path)}">${escapeHtml(job.path)}</p>` : ''}
+        </div>
+        <div class="download-actions">
+          ${job.status === 'failed' ? `<button class="secondary" type="button" data-download-retry="${escapeHtml(job.id)}">重试</button>` : ''}
+          ${job.path ? `<button class="secondary" type="button" data-download-copy="${escapeHtml(job.path)}">复制路径</button>` : ''}
+          ${['completed', 'failed'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}">删除记录</button>` : ''}
+        </div>
+      </article>`;
+    }).join('');
+    list.querySelectorAll('[data-download-retry]').forEach(button => button.addEventListener('click', async () => {
+      try {
+        await request('/api/songs/download/retry', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: button.dataset.downloadRetry }),
+        });
+        toast('已重新加入下载队列');
+        loadDownloads();
+      } catch (error) { toast(error.message, 5200); }
+    }));
+    list.querySelectorAll('[data-download-remove]').forEach(button => button.addEventListener('click', async () => {
+      try {
+        await request(`/api/songs/download?id=${encodeURIComponent(button.dataset.downloadRemove)}`, { method: 'DELETE' });
+        loadDownloads();
+      } catch (error) { toast(error.message, 5200); }
+    }));
+    list.querySelectorAll('[data-download-copy]').forEach(button => button.addEventListener('click', () => copyText(button.dataset.downloadCopy)));
+  }
+
+  async function loadDownloads() {
+    clearTimeout(state.downloadManagerTimer);
+    try {
+      const resp = await request('/api/songs/download');
+      state.downloadTaskList = resp.data?.jobs || [];
+      renderDownloads();
+      if (state.downloadTaskList.some(job => job.status === 'queued' || job.status === 'downloading')) {
+        state.downloadManagerTimer = setTimeout(loadDownloads, 1400);
+      }
+    } catch (error) {
+      toast(`加载下载任务失败：${error.message}`, 5200);
+    }
   }
 
   async function probeDownload(item) {
@@ -739,7 +832,15 @@
       const resp = await request('/api/songs/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ song: item, fetch_lyric: true }),
+        body: JSON.stringify({
+          song: item,
+          fetch_lyric: true,
+          download_meta: probe ? {
+            total_bytes: probe.total_bytes,
+            actual_quality: probe.actual_quality || probe.requestedQuality,
+            content_type: probe.content_type || '',
+          } : {},
+        }),
       });
       const job = resp.data?.job;
       if (!job?.id) throw new Error('未创建下载任务');
@@ -1029,6 +1130,17 @@ curl -X POST "${endpoint}" \
   $('quality').addEventListener('change', () => updateExternalExample($('quality').value));
   $('defaultQualitySetting').addEventListener('change', () => updateExternalExample($('defaultQualitySetting').value));
 
+  $('downloadFilter').addEventListener('change', renderDownloads);
+  $('refreshDownloads').addEventListener('click', loadDownloads);
+  $('clearFinishedDownloads').addEventListener('click', async () => {
+    if (!confirm('确定清除所有已完成和失败的下载记录吗？已下载文件不会被删除。')) return;
+    try {
+      const resp = await request('/api/songs/download?all=finished', { method: 'DELETE' });
+      toast(`已清除 ${resp.data?.removed || 0} 条记录`);
+      loadDownloads();
+    } catch (error) { toast(error.message, 5200); }
+  });
+
   $('refreshSources').addEventListener('click', loadSources);
   $('refreshStatus').addEventListener('click', () => { loadStatus(); loadSources(); });
 
@@ -1042,5 +1154,6 @@ curl -X POST "${endpoint}" \
   toggleNewPlaylistField('singlePlaylistTarget', 'singleNewPlaylistField');
   updatePlayerDock(null, '');
   loadStatus();
+  loadDownloads();
   updateExternalExample(defaultQuality());
 })();
