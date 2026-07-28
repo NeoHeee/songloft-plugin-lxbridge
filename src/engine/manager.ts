@@ -1,6 +1,28 @@
 import type { MusicInfo, PlatformId, ResolvedUrl, SourceMeta, SourceRuntimeInfo } from '../types';
 import { SourceRuntime } from './runtime';
 
+const QUALITY_ORDER = ['master', 'atmos', 'flac24bit', 'flac', '320k', '128k'] as const;
+const QUALITY_ALIASES: Record<string, string> = {
+  hires: 'flac24bit',
+  '24bit': 'flac24bit',
+  '24-bit': 'flac24bit',
+  lossless: 'flac',
+  high: '320k',
+  standard: '128k',
+};
+
+function normalizeQuality(value: string): string {
+  const quality = String(value || '320k').trim().toLowerCase();
+  return QUALITY_ALIASES[quality] || quality;
+}
+
+function fallbackQualities(requested: string): string[] {
+  const normalized = normalizeQuality(requested);
+  const index = QUALITY_ORDER.indexOf(normalized as typeof QUALITY_ORDER[number]);
+  if (index >= 0) return [...QUALITY_ORDER.slice(index)];
+  return [normalized, 'flac24bit', 'flac', '320k', '128k'];
+}
+
 export class RuntimeManager {
   private runtimes = new Map<string, SourceRuntime>();
   private platformIndex = new Map<PlatformId, SourceRuntime[]>();
@@ -50,14 +72,43 @@ export class RuntimeManager {
     return Array.from(this.runtimes.values()).map(runtime => runtime.info());
   }
 
-  async getMusicUrl(platform: PlatformId, songInfo: MusicInfo, quality = '320k'): Promise<ResolvedUrl> {
-    const candidates = [...(this.platformIndex.get(platform) || [])];
-    if (!candidates.length) throw new Error(`没有已启用且支持 ${platform} 的洛雪音源`);
-    candidates.sort((a, b) => {
-      const ar = a.totalCalls ? a.successCalls / a.totalCalls : 1;
-      const br = b.totalCalls ? b.successCalls / b.totalCalls : 1;
-      return br - ar;
+  getSupportedQualities(platform?: PlatformId): string[] {
+    const runtimes = platform
+      ? this.platformIndex.get(platform) || []
+      : Array.from(this.runtimes.values());
+    const found = new Set<string>();
+    for (const runtime of runtimes) {
+      const platforms = platform ? [platform] : Object.keys(runtime.sources) as PlatformId[];
+      for (const id of platforms) {
+        for (const quality of runtime.supportedQualities(id)) found.add(normalizeQuality(quality));
+      }
+    }
+    return Array.from(found).sort((a, b) => {
+      const ai = QUALITY_ORDER.indexOf(a as typeof QUALITY_ORDER[number]);
+      const bi = QUALITY_ORDER.indexOf(b as typeof QUALITY_ORDER[number]);
+      if (ai < 0 && bi < 0) return a.localeCompare(b);
+      if (ai < 0) return -1;
+      if (bi < 0) return 1;
+      return ai - bi;
     });
+  }
+
+  private candidatesForQuality(platform: PlatformId, quality: string): SourceRuntime[] {
+    return [...(this.platformIndex.get(platform) || [])]
+      .filter(runtime => {
+        const declared = runtime.supportedQualities(platform).map(normalizeQuality);
+        return !declared.length || declared.includes(quality);
+      })
+      .sort((a, b) => {
+        const ar = a.totalCalls ? a.successCalls / a.totalCalls : 1;
+        const br = b.totalCalls ? b.successCalls / b.totalCalls : 1;
+        return br - ar;
+      });
+  }
+
+  private async resolveAtQuality(platform: PlatformId, songInfo: MusicInfo, quality: string): Promise<ResolvedUrl> {
+    const candidates = this.candidatesForQuality(platform, quality);
+    if (!candidates.length) throw new Error(`没有音源声明支持 ${platform} 的 ${quality} 音质`);
 
     if (candidates.length === 1) return await candidates[0].resolve(platform, songInfo, quality);
 
@@ -77,5 +128,28 @@ export class RuntimeManager {
     }
     const details = result.errors.filter(Boolean).join('; ');
     throw new Error(details ? `所有音源解析失败: ${details}` : '所有音源解析失败或超时');
+  }
+
+  async getMusicUrl(platform: PlatformId, songInfo: MusicInfo, quality = '320k'): Promise<ResolvedUrl> {
+    if (!this.hasPlatform(platform)) throw new Error(`没有已启用且支持 ${platform} 的洛雪音源`);
+    const requestedQuality = normalizeQuality(quality);
+    const attempts = fallbackQualities(requestedQuality);
+    const errors: string[] = [];
+
+    for (const actualQuality of attempts) {
+      try {
+        const resolved = await this.resolveAtQuality(platform, songInfo, actualQuality);
+        return {
+          ...resolved,
+          requestedQuality,
+          actualQuality,
+          downgraded: actualQuality !== requestedQuality,
+        };
+      } catch (error) {
+        errors.push(`${actualQuality}: ${String((error as Error)?.message || error)}`);
+      }
+    }
+
+    throw new Error(`所有音质均解析失败（${errors.join('；')}）`);
   }
 }
