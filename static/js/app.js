@@ -834,8 +834,9 @@
         const actualQuality = probe.actual_quality || probe.requestedQuality;
         const sizeLine = probe.total_bytes == null ? '大小未知' : formatBytes(probe.total_bytes);
         const typeLine = probe.content_type ? `\n格式：${probe.content_type}` : '';
+        const probeLine = probe.probe_error ? `\n探测说明：${probe.probe_error}` : '';
         const proceed = window.confirm(
-          `确认下载《${item.title}》？\n\n请求音质：${probe.requestedQuality}\n实际音质：${actualQuality}${probe.downgraded ? '（已自动降级）' : ''}\n文件大小：${sizeLine}${typeLine}`,
+          `确认下载《${item.title}》？\n\n请求音质：${probe.requestedQuality}\n实际音质：${actualQuality}${probe.downgraded ? '（已自动降级）' : ''}\n文件大小：${sizeLine}${typeLine}${probeLine}`,
         );
         if (!proceed) return;
         item.source_data.requested_quality = probe.requestedQuality;
