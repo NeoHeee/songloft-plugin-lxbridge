@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.3.0</span>
+              <span class="version-badge">v0.3.1</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -332,11 +332,21 @@
                   <option value="128k">标准 · 128K</option>
                   <option value="320k">高品质 · 320K</option>
                   <option value="flac">无损 · FLAC</option>
-                  <option value="flac24bit">Hi-Res 无损 · 24-Bit</option>
-                  <option value="atmos">臻品音质</option>
+                  <option value="flac24bit">FLAC 24-Bit</option>
+                  <option value="hires">Hi-Res 无损</option>
+                  <option value="atmos">沉浸声 · Atmos</option>
+                  <option value="atmos_plus">臻品音质 · Atmos Plus</option>
                   <option value="master">臻品母带</option>
                 </select>
               </div>
+              <label class="check-card">
+                <input id="allowAutoDowngrade" type="checkbox" checked>
+                <span class="check-mark"></span>
+                <span>
+                  <strong>允许自动降级</strong>
+                  <small>关闭后，请求音质解析失败会直接报错，不会下载较低音质文件。</small>
+                </span>
+              </label>
               <button id="saveSettings" class="primary settings-save" type="button">保存</button>
             </div>
           </div>
