@@ -70,11 +70,18 @@ export function createSearchRoute(): (req: HTTPRequest) => Promise<HTTPResponse>
     }
     const sourceId = String(body.source_id || 'wy');
     const quality = String(body.quality || '320k');
+    const allowDowngrade = body.allow_downgrade !== false;
     const handler = createSearchHandler({
       search: async (keyword, page, pageSize) => {
-        if (sourceId === 'all') return await searchAcross(keyword, page || 1, pageSize || 30, quality);
-        if (!isPlatform(sourceId)) throw new Error(`unsupported source_id: ${sourceId}`);
-        return await searchOne(sourceId, keyword, page || 1, pageSize || 30, quality);
+        const items = sourceId === 'all'
+          ? await searchAcross(keyword, page || 1, pageSize || 30, quality)
+          : (() => {
+              if (!isPlatform(sourceId)) throw new Error(`unsupported source_id: ${sourceId}`);
+              return searchOne(sourceId, keyword, page || 1, pageSize || 30, quality);
+            })();
+        const resolved = await items;
+        for (const item of resolved) item.source_data.allow_downgrade = allowDowngrade;
+        return resolved;
       },
     });
     const normalized = { ...req, body: JSON.stringify(body) } as unknown as HTTPRequest;
@@ -101,7 +108,12 @@ export function createMusicUrlRoute(runtimeManager: RuntimeManager): (req: HTTPR
       const quality = String(sourceData.quality || '320k');
       const songInfo = sourceData.songInfo;
       if (!isPlatform(platform) || !songInfo || typeof songInfo !== 'object') throw new Error('source_data 格式无效');
-      const resolved = await runtimeManager.getMusicUrl(platform, songInfo as MusicInfo, quality);
+      const resolved = await runtimeManager.getMusicUrl(
+        platform,
+        songInfo as MusicInfo,
+        quality,
+        sourceData.allow_downgrade !== false,
+      );
       return resolved.headers ? { url: resolved.url, headers: resolved.headers } : resolved.url;
     },
     fallbackSearch,
