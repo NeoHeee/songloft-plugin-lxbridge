@@ -188,11 +188,34 @@ export class SourceRuntime {
 
   buildDispatchCall(platform: PlatformId, songInfo: MusicInfo, quality: string, waitForError = false): DispatchCallBuild {
     this.requestCounter += 1;
+    // 部分移动端增强音源读取旧版顶层字段，另一些读取新版 meta 字段。
+    // 同时提供两种结构，避免因缺少 songId/_qualitys 而静默返回低音质地址。
+    const songId = songInfo.musicId || songInfo.songmid || songInfo.meta?.songId || '';
+    const qualitys = Array.isArray(songInfo.meta?.qualitys)
+      ? songInfo.meta.qualitys
+      : Array.isArray(songInfo.types) ? songInfo.types : [];
+    const qualityMap = songInfo.meta?._qualitys && typeof songInfo.meta._qualitys === 'object'
+      ? songInfo.meta._qualitys
+      : Object.fromEntries(qualitys.map(item => [String(item.type), { size: item.size }]));
+    const compatibleSongInfo: MusicInfo = {
+      ...songInfo,
+      songmid: songInfo.songmid || String(songId),
+      musicId: songInfo.musicId || String(songId),
+      meta: {
+        ...(songInfo.meta || {}),
+        songId: String(songId),
+        qualitys,
+        _qualitys: qualityMap,
+        _full: true,
+      },
+      types: songInfo.types || qualitys,
+      _types: songInfo._types || qualityMap,
+    };
     const requestId = `${this.id}_${Date.now()}_${this.requestCounter}`;
     const payload = {
       source: platform,
       action: 'musicUrl',
-      info: { musicInfo: songInfo, type: quality, quality },
+      info: { musicInfo: compatibleSongInfo, type: quality, quality },
     };
     const code = `globalThis.lx._dispatch(${JSON.stringify(requestId)}, "request", ${JSON.stringify(JSON.stringify(payload))});`;
     return {

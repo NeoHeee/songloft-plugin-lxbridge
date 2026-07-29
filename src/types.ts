@@ -22,6 +22,14 @@ export interface MusicInfo {
   albumId?: string;
   types?: QualityInfo[];
   _types?: Record<string, { size?: string }>;
+  meta?: {
+    songId?: string | number;
+    qualitys?: QualityInfo[];
+    _qualitys?: Record<string, { size?: string }>;
+    _full?: boolean;
+    fee?: number;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
