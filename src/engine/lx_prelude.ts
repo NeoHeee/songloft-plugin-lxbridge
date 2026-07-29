@@ -273,7 +273,8 @@ export const LX_PRELUDE_JS = String.raw`
   var lx = {
     // 官方桌面端用户音源环境当前暴露 2.0.0；部分脚本会把它写进 UA 或做环境判断。
     version: '2.0.0',
-    env: 'desktop',
+    // 高音质增强源可能按运行环境选择能力；LxBridge 的管理页与下载场景更接近移动端。
+    env: 'mobile',
     currentScriptInfo: {},
     sources: {},
     EVENT_NAMES: EVENT_NAMES,
@@ -328,7 +329,7 @@ export const LX_PRELUDE_JS = String.raw`
   globalThis.self = globalThis;
   globalThis.global = globalThis;
   if (typeof globalThis.navigator === 'undefined') {
-    globalThis.navigator = { userAgent: 'lx-music-desktop/2.0.0 Songloft' };
+    globalThis.navigator = { userAgent: 'lx-music-mobile/2.0.0 Songloft LxBridge' };
   }
   if (typeof globalThis.location === 'undefined') {
     globalThis.location = { href: '', protocol: 'https:', hostname: 'localhost' };
