@@ -6,6 +6,8 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 ## v0.3.1
 
+当前稳定版本：`v0.3.1`（2026-07-29 发布）。
+
 - 保留 `hires` 原始请求参数，不再转换成 `flac24bit`；
 - 新增并区分 `hires`、`flac24bit`、`atmos`、`atmos_plus`、`master`；
 - 用户选择的音质始终优先原样请求，音源能力声明只影响尝试顺序；
