@@ -30,22 +30,51 @@ function parseTotalBytes(headers: Headers): number | null {
 }
 
 async function probeAudio(url: string, requestHeaders: Record<string, string>) {
-  const inspect = async (method: 'HEAD' | 'GET', extraHeaders: Record<string, string> = {}) => {
-    const response = await fetch(url, { method, headers: { ...requestHeaders, ...extraHeaders }, redirect: 'follow' });
-    if (!response.ok && response.status !== 206) throw new Error(`音频服务器返回 HTTP ${response.status}`);
+  type ProbeResult = {
+    total_bytes: number | null;
+    content_type: string;
+    accept_ranges: boolean;
+    probe_error?: string;
+  };
+  const errors: string[] = [];
+  const inspect = async (method: 'HEAD' | 'GET', extraHeaders: Record<string, string> = {}): Promise<ProbeResult> => {
+    const response = await fetch(url, {
+      method,
+      headers: { ...requestHeaders, ...extraHeaders },
+      redirect: 'follow',
+    });
+    if (!response.ok && response.status !== 206) {
+      throw new Error(`${method} 返回 HTTP ${response.status}`);
+    }
     return {
       total_bytes: parseTotalBytes(response.headers),
       content_type: (response.headers.get('content-type') || '').split(';')[0],
       accept_ranges: /bytes/i.test(response.headers.get('accept-ranges') || '') || response.status === 206,
     };
   };
-  try {
-    const head = await inspect('HEAD');
-    if (head.total_bytes != null) return head;
-  } catch {
-    // 部分音频服务器禁用 HEAD，继续用单字节 Range 请求探测。
+
+  for (const attempt of [
+    () => inspect('HEAD'),
+    () => inspect('GET', { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' }),
+  ]) {
+    try {
+      const result = await attempt();
+      if (result.total_bytes != null) return result;
+      errors.push('服务器未返回 Content-Length 或 Content-Range');
+      if (result.content_type) {
+        return { ...result, probe_error: errors.join('；') };
+      }
+    } catch (error) {
+      errors.push(errorMessage(error));
+    }
   }
-  return await inspect('GET', { Range: 'bytes=0-0' });
+
+  return {
+    total_bytes: null,
+    content_type: '',
+    accept_ranges: false,
+    probe_error: [...new Set(errors)].join('；') || '音频服务器不支持文件大小探测',
+  };
 }
 
 export function directHandlers(runtimeManager: RuntimeManager) {
