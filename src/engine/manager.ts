@@ -1,9 +1,8 @@
 import type { MusicInfo, PlatformId, ResolvedUrl, SourceMeta, SourceRuntimeInfo } from '../types';
 import { SourceRuntime } from './runtime';
 
-const QUALITY_ORDER = ['master', 'atmos', 'flac24bit', 'flac', '320k', '128k'] as const;
+const QUALITY_ORDER = ['master', 'atmos_plus', 'atmos', 'hires', 'flac24bit', 'flac', '320k', '128k'] as const;
 const QUALITY_ALIASES: Record<string, string> = {
-  hires: 'flac24bit',
   '24bit': 'flac24bit',
   '24-bit': 'flac24bit',
   lossless: 'flac',
@@ -16,11 +15,12 @@ function normalizeQuality(value: string): string {
   return QUALITY_ALIASES[quality] || quality;
 }
 
-function fallbackQualities(requested: string): string[] {
+function fallbackQualities(requested: string, allowDowngrade: boolean): string[] {
   const normalized = normalizeQuality(requested);
+  if (!allowDowngrade) return [normalized];
   const index = QUALITY_ORDER.indexOf(normalized as typeof QUALITY_ORDER[number]);
   if (index >= 0) return [...QUALITY_ORDER.slice(index)];
-  return [normalized, 'flac24bit', 'flac', '320k', '128k'];
+  return [normalized, 'hires', 'flac24bit', 'flac', '320k', '128k'];
 }
 
 export class RuntimeManager {
@@ -95,11 +95,12 @@ export class RuntimeManager {
 
   private candidatesForQuality(platform: PlatformId, quality: string): SourceRuntime[] {
     return [...(this.platformIndex.get(platform) || [])]
-      .filter(runtime => {
-        const declared = runtime.supportedQualities(platform).map(normalizeQuality);
-        return !declared.length || declared.includes(quality);
-      })
       .sort((a, b) => {
+        const aq = a.supportedQualities(platform).map(normalizeQuality);
+        const bq = b.supportedQualities(platform).map(normalizeQuality);
+        const ad = !aq.length || aq.includes(quality) ? 1 : 0;
+        const bd = !bq.length || bq.includes(quality) ? 1 : 0;
+        if (ad !== bd) return bd - ad;
         const ar = a.totalCalls ? a.successCalls / a.totalCalls : 1;
         const br = b.totalCalls ? b.successCalls / b.totalCalls : 1;
         return br - ar;
@@ -108,7 +109,7 @@ export class RuntimeManager {
 
   private async resolveAtQuality(platform: PlatformId, songInfo: MusicInfo, quality: string): Promise<ResolvedUrl> {
     const candidates = this.candidatesForQuality(platform, quality);
-    if (!candidates.length) throw new Error(`没有音源声明支持 ${platform} 的 ${quality} 音质`);
+    if (!candidates.length) throw new Error(`没有已启用的 ${platform} 音源可尝试 ${quality} 音质`);
 
     if (candidates.length === 1) return await candidates[0].resolve(platform, songInfo, quality);
 
@@ -130,26 +131,28 @@ export class RuntimeManager {
     throw new Error(details ? `所有音源解析失败: ${details}` : '所有音源解析失败或超时');
   }
 
-  async getMusicUrl(platform: PlatformId, songInfo: MusicInfo, quality = '320k'): Promise<ResolvedUrl> {
+  async getMusicUrl(platform: PlatformId, songInfo: MusicInfo, quality = '320k', allowDowngrade = true): Promise<ResolvedUrl> {
     if (!this.hasPlatform(platform)) throw new Error(`没有已启用且支持 ${platform} 的洛雪音源`);
     const requestedQuality = normalizeQuality(quality);
-    const attempts = fallbackQualities(requestedQuality);
+    const attempts = fallbackQualities(requestedQuality, allowDowngrade);
     const errors: string[] = [];
 
     for (const actualQuality of attempts) {
       try {
         const resolved = await this.resolveAtQuality(platform, songInfo, actualQuality);
+        const reportedQuality = normalizeQuality(resolved.actualQuality || actualQuality);
         return {
           ...resolved,
           requestedQuality,
-          actualQuality,
-          downgraded: actualQuality !== requestedQuality,
+          actualQuality: reportedQuality,
+          downgraded: reportedQuality !== requestedQuality,
         };
       } catch (error) {
         errors.push(`${actualQuality}: ${String((error as Error)?.message || error)}`);
       }
     }
 
-    throw new Error(`所有音质均解析失败（${errors.join('；')}）`);
+    const prefix = allowDowngrade ? '所有音质均解析失败' : `${requestedQuality} 解析失败，且已禁止自动降级`;
+    throw new Error(`${prefix}（${errors.join('；')}）`);
   }
 }
