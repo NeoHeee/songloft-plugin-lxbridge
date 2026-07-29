@@ -55,7 +55,7 @@ export function directHandlers(runtimeManager: RuntimeManager) {
         const body = parseJSONBody<Record<string, any>>(req);
         const songInfo = body.songInfo as MusicInfo;
         const source = platform(songInfo?.source || body.source_id);
-        const result = await runtimeManager.getMusicUrl(source, songInfo, String(body.quality || '320k'));
+        const result = await runtimeManager.getMusicUrl(source, songInfo, String(body.quality || '320k'), body.allow_downgrade !== false);
         return ok(result);
       } catch (error) { return fail(errorMessage(error), 404); }
     },
@@ -66,7 +66,7 @@ export function directHandlers(runtimeManager: RuntimeManager) {
         const songInfo = body.songInfo as MusicInfo;
         const source = platform(songInfo?.source || body.source_id);
         const requestedQuality = String(body.quality || '320k');
-        const resolved = await runtimeManager.getMusicUrl(source, songInfo, requestedQuality);
+        const resolved = await runtimeManager.getMusicUrl(source, songInfo, requestedQuality, body.allow_downgrade !== false);
         const headers = Object.fromEntries(Object.entries(resolved.headers || {}).map(([key, value]) => [key, String(value)]));
         const file = await probeAudio(resolved.url, headers);
         return ok({
@@ -74,6 +74,7 @@ export function directHandlers(runtimeManager: RuntimeManager) {
           requested_quality: resolved.requestedQuality || requestedQuality,
           actual_quality: resolved.actualQuality || requestedQuality,
           downgraded: Boolean(resolved.downgraded),
+          downgrade_allowed: body.allow_downgrade !== false,
         });
       } catch (error) { return fail(errorMessage(error), 404); }
     },
@@ -94,6 +95,7 @@ export function directHandlers(runtimeManager: RuntimeManager) {
         const title = String(body.title || body.keyword || '').trim();
         const artist = String(body.artist || '').trim();
         const quality = String(body.quality || '320k');
+        const allowDowngrade = body.allow_downgrade !== false;
         if (!title) throw new Error('title/keyword is required');
         const candidates = await searchAcross(`${title} ${artist}`.trim(), 1, 10, quality);
         candidates.sort((a,b)=>matchScore(b,title,artist,body.duration)-matchScore(a,title,artist,body.duration));
@@ -101,7 +103,7 @@ export function directHandlers(runtimeManager: RuntimeManager) {
         for (const item of candidates.slice(0,20)) {
           try {
             const sd=item.source_data; const source=platform(sd.platform); const songInfo=sd.songInfo as MusicInfo;
-            const resolved=await runtimeManager.getMusicUrl(source,songInfo,String(sd.quality||quality));
+            const resolved=await runtimeManager.getMusicUrl(source,songInfo,String(sd.quality||quality),allowDowngrade);
             return ok({
               ...item,
               url: resolved.url,
@@ -109,7 +111,7 @@ export function directHandlers(runtimeManager: RuntimeManager) {
               requested_quality: resolved.requestedQuality || quality,
               actual_quality: resolved.actualQuality || quality,
               downgraded: Boolean(resolved.downgraded),
-              source_data: { ...sd, quality: resolved.actualQuality || sd.quality || quality },
+              source_data: { ...sd, quality: resolved.actualQuality || sd.quality || quality, allow_downgrade: allowDowngrade },
             });
           } catch (error) { errors.push(errorMessage(error)); }
         }
