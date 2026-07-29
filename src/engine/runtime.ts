@@ -51,7 +51,12 @@ function normalizeResolved(value: unknown): ResolvedUrl {
     if (item.headers && typeof item.headers === 'object') {
       for (const key of Object.keys(item.headers)) headers[key] = String(item.headers[key]);
     }
-    return Object.keys(headers).length ? { url, headers } : { url };
+    const actualQuality = String(item.actualQuality || item.actual_quality || item.quality || '').trim().toLowerCase();
+    return {
+      url,
+      ...(Object.keys(headers).length ? { headers } : {}),
+      ...(actualQuality ? { actualQuality } : {}),
+    };
   }
   throw new Error('音源未返回播放地址');
 }
