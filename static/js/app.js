@@ -33,16 +33,22 @@
     { value: '128k', label: '标准 · 128K', common: true },
     { value: '320k', label: '高品质 · 320K', common: true },
     { value: 'flac', label: '无损 · FLAC', common: true },
-    { value: 'flac24bit', label: 'Hi-Res 无损 · 24-Bit', common: true },
-    { value: 'atmos', label: '臻品音质' },
+    { value: 'flac24bit', label: 'FLAC 24-Bit', common: true },
+    { value: 'hires', label: 'Hi-Res 无损' },
+    { value: 'atmos', label: '沉浸声 · Atmos' },
+    { value: 'atmos_plus', label: '臻品音质 · Atmos Plus' },
     { value: 'master', label: '臻品母带' },
   ];
-  const qualityAliases = { hires: 'flac24bit', '24bit': 'flac24bit', '24-bit': 'flac24bit', lossless: 'flac', high: '320k', standard: '128k' };
+  const qualityAliases = { '24bit': 'flac24bit', '24-bit': 'flac24bit', lossless: 'flac', high: '320k', standard: '128k' };
   const normalizeQuality = value => qualityAliases[String(value || '').trim().toLowerCase()] || String(value || '').trim().toLowerCase();
   const musicPlaceholder = '<span class="cover-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6.8l9-1.8v10.2"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="15.2" r="2.5"/></svg></span>';
 
   function defaultQuality() {
     return localStorage.getItem('lxbridge:defaultQuality') || localStorage.getItem('lxmusic:defaultQuality') || '320k';
+  }
+
+  function allowAutoDowngrade() {
+    return localStorage.getItem('lxbridge:allowAutoDowngrade') !== 'false';
   }
 
   function setTheme(mode) {
@@ -191,6 +197,7 @@
     ids.forEach(id => {
       (state.qualityByPlatform[id] || []).forEach(value => found.add(normalizeQuality(value)));
       if (state.legacyQualityPlatforms.has(id)) legacy = true;
+      if (id === 'wy') ['hires', 'atmos', 'atmos_plus', 'master'].forEach(value => found.add(value));
     });
     if (legacy || !ids.length || !Object.keys(state.qualityByPlatform).length) {
       qualityCatalog.filter(item => item.common).forEach(item => found.add(item.value));
@@ -322,6 +329,12 @@
     $('results').innerHTML = state.results.map((item, index) => {
       const checked = selected.has(selectedKey(item));
       const source = item.source_data?.platform || '';
+      const songQualities = Array.isArray(item.source_data?.songInfo?.types)
+        ? item.source_data.songInfo.types.map(entry => entry?.type).filter(Boolean)
+        : [];
+      const qualityHint = source === 'wy' && songQualities.length
+        ? ` · 可用音质 ${songQualities.join(' / ')}`
+        : '';
       const playing = isPlayingItem(item);
       const downloadJob = state.downloadJobs[selectedKey(item)] || null;
       const downloadLabel = downloadJob?.status === 'completed'
@@ -339,7 +352,7 @@
         ${coverMarkup(item.cover_url, item.title)}
         <div class="result-main">
           <div class="title">${escapeHtml(item.title)}</div>
-          <div class="sub">${escapeHtml(item.artist || '未知歌手')} · ${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)}</div>
+          <div class="sub">${escapeHtml(item.artist || '未知歌手')} · ${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)}${escapeHtml(qualityHint)}</div>
         </div>
         <div class="result-side">
           <div class="result-tags">
@@ -410,6 +423,7 @@
           quality: $('quality').value,
           page: 1,
           page_size: 30,
+          allow_downgrade: allowAutoDowngrade(),
         }),
       });
       state.results = resp.results || [];
@@ -757,6 +771,7 @@
         source_id: item.source_data?.platform,
         songInfo: item.source_data?.songInfo,
         quality: requestedQuality,
+        allow_downgrade: allowAutoDowngrade(),
       }),
     });
     return { requestedQuality, ...(resp.data || {}) };
@@ -817,16 +832,15 @@
       }
       if (probe) {
         const actualQuality = probe.actual_quality || probe.requestedQuality;
-        item.source_data.quality = actualQuality;
-        const qualityLine = probe.downgraded
-          ? `${probe.requestedQuality} → ${actualQuality}（已自动降级）`
-          : actualQuality;
         const sizeLine = probe.total_bytes == null ? '大小未知' : formatBytes(probe.total_bytes);
         const typeLine = probe.content_type ? `\n格式：${probe.content_type}` : '';
         const proceed = window.confirm(
-          `确认下载《${item.title}》？\n\n实际音质：${qualityLine}\n文件大小：${sizeLine}${typeLine}`,
+          `确认下载《${item.title}》？\n\n请求音质：${probe.requestedQuality}\n实际音质：${actualQuality}${probe.downgraded ? '（已自动降级）' : ''}\n文件大小：${sizeLine}${typeLine}`,
         );
         if (!proceed) return;
+        item.source_data.requested_quality = probe.requestedQuality;
+        item.source_data.quality = actualQuality;
+        item.source_data.allow_downgrade = allowAutoDowngrade();
       }
       setBusy(button, true, '准备中');
       const resp = await request('/api/songs/download', {
@@ -897,6 +911,7 @@
           source_id: item.source_data?.platform,
           songInfo: item.source_data?.songInfo,
           quality: requestedQuality,
+          allow_downgrade: allowAutoDowngrade(),
         }),
       });
       const resolved = resp.data || {};
@@ -1124,11 +1139,13 @@ curl -X POST "${endpoint}" \
   $('saveSettings').addEventListener('click', () => {
     const value = $('defaultQualitySetting').value || '320k';
     localStorage.setItem('lxbridge:defaultQuality', value);
+    localStorage.setItem('lxbridge:allowAutoDowngrade', String($('allowAutoDowngrade').checked));
     syncQualityControls(value);
     toast('默认音质已保存');
   });
   $('quality').addEventListener('change', () => updateExternalExample($('quality').value));
   $('defaultQualitySetting').addEventListener('change', () => updateExternalExample($('defaultQualitySetting').value));
+  $('allowAutoDowngrade').checked = allowAutoDowngrade();
 
   $('downloadFilter').addEventListener('change', renderDownloads);
   $('refreshDownloads').addEventListener('click', loadDownloads);
