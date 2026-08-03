@@ -54,7 +54,7 @@ async function mapSong(item: SearchSongItem, fetchLyric: boolean): Promise<Recor
     album: item.album || songInfo.albumName || '',
     cover_url: item.cover_url || songInfo.img || '',
     duration: Number(item.duration || songInfo.duration || 0),
-    plugin_entry_path: 'lxmusic',
+    plugin_entry_path: 'lxbridge',
     source_data: JSON.stringify(sourceData),
   };
   if (id) payload.dedup_key = `${platform}:${id}`;

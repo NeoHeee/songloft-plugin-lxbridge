@@ -51,6 +51,24 @@ export function sourceHandlers(manager: SourceManager) {
   return {
     list: async (): Promise<HTTPResponse> => ok(manager.list()),
 
+    exportFile: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const id = parseQuery(req.query).id || '';
+        if (!id) throw new Error('id is required');
+        const exported = await manager.exportScript(id);
+        const asciiName = `source-${id.replace(/[^A-Za-z0-9_-]+/g, '_')}.js`;
+        return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/javascript; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(exported.filename)}`,
+            'Cache-Control': 'no-store',
+          },
+          body: exported.script,
+        };
+      } catch (error) { return fail(errorMessage(error), 400); }
+    },
+
     importFile: async (req: HTTPRequest): Promise<HTTPResponse> => {
       try {
         const rawBody = bodyToBytes(req.body);

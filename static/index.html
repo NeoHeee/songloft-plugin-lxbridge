@@ -16,7 +16,7 @@
       window.__LX_PLUGIN_ROOT__ = pluginRoot;
       window.__LX_STATIC_ROOT__ = `${pluginRoot}/static`;
 
-      const theme = localStorage.getItem('lxmusic:theme') || 'system';
+      const theme = localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system';
       document.documentElement.dataset.themeMode = theme;
       if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
 
@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.3.4</span>
+              <span class="version-badge">v0.4.0</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -97,6 +97,10 @@
         <button class="tab active" type="button" data-tab="search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <span>搜索</span>
+        </button>
+        <button class="tab" type="button" data-tab="browse">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/></svg>
+          <span>发现</span>
         </button>
         <button class="tab" type="button" data-tab="import">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
@@ -177,6 +181,48 @@
             <strong>开始搜索你的音乐</strong>
             <p>输入歌曲或歌手名称，结果会显示在这里。</p>
           </div>
+        </div>
+      </section>
+
+      <section id="tab-browse" class="panel">
+        <div class="card browse-card">
+          <div class="section-heading row between browse-heading">
+            <div>
+              <span class="section-kicker">音乐发现</span>
+              <h2 id="browseHeading">排行榜</h2>
+              <p class="muted">浏览五个平台的排行榜和热门歌单，可直接试听、下载或导入。</p>
+            </div>
+            <button id="refreshBrowse" class="secondary" type="button">刷新</button>
+          </div>
+          <div class="browse-toolbar">
+            <div class="browse-mode" role="group" aria-label="发现类型">
+              <button class="browse-mode-button active" type="button" data-browse-mode="rank">排行榜</button>
+              <button class="browse-mode-button" type="button" data-browse-mode="playlist">热门歌单</button>
+            </div>
+            <label class="field browse-platform-field" for="browsePlatform">
+              <span>平台</span>
+              <select id="browsePlatform">
+                <option value="kw">酷我音乐</option>
+                <option value="kg">酷狗音乐</option>
+                <option value="tx">QQ 音乐</option>
+                <option value="wy" selected>网易云音乐</option>
+                <option value="mg">咪咕音乐</option>
+              </select>
+            </label>
+          </div>
+          <div id="browseCatalog" class="browse-grid"></div>
+        </div>
+
+        <div id="browseDetail" class="card hidden">
+          <div class="section-heading row between browse-detail-heading">
+            <div>
+              <button id="browseBack" class="text-button" type="button">← 返回列表</button>
+              <h2 id="browseDetailTitle">详情</h2>
+              <p id="browseDetailMeta" class="muted"></p>
+            </div>
+            <button id="selectAllBrowse" class="secondary" type="button">全选歌曲</button>
+          </div>
+          <div id="browseSongs" class="result-list"></div>
         </div>
       </section>
 

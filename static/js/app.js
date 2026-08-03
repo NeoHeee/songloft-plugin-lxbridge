@@ -23,6 +23,11 @@
     downloadManagerTimer: 0,
     qualityByPlatform: {},
     legacyQualityPlatforms: new Set(),
+    browseMode: 'rank',
+    browsePlatform: 'wy',
+    browseCatalog: [],
+    browseSongs: [],
+    browseTitle: '',
   };
 
   const $ = id => document.getElementById(id);
@@ -54,7 +59,7 @@
 
   function setTheme(mode) {
     const normalized = ['system', 'light', 'dark'].includes(mode) ? mode : 'system';
-    localStorage.setItem('lxmusic:theme', normalized);
+    localStorage.setItem('lxbridge:theme', normalized);
     document.documentElement.dataset.themeMode = normalized;
     if (normalized === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = normalized;
@@ -73,10 +78,10 @@
   document.querySelectorAll('[data-theme-choice]').forEach(button => {
     button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
   });
-  setTheme(localStorage.getItem('lxmusic:theme') || 'system');
+  setTheme(localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system');
   const colorScheme = matchMedia('(prefers-color-scheme: dark)');
   const onSchemeChange = () => {
-    if ((localStorage.getItem('lxmusic:theme') || 'system') === 'system') setTheme('system');
+    if ((localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system') === 'system') setTheme('system');
   };
   if (colorScheme.addEventListener) colorScheme.addEventListener('change', onSchemeChange);
   else if (colorScheme.addListener) colorScheme.addListener(onSchemeChange);
@@ -257,6 +262,7 @@
       loadPlaylists();
     }
     if (name === 'downloads') loadDownloads();
+    if (name === 'browse') loadBrowseCatalog();
     if (name === 'sources') loadSources();
     if (name === 'settings') updateExternalExample($('defaultQualitySetting').value || defaultQuality());
   }
@@ -381,7 +387,7 @@
       const key = selectedKey(item);
       if (event.target.checked && !state.selected.some(x => selectedKey(x) === key)) state.selected.push(item);
       if (!event.target.checked) state.selected = state.selected.filter(x => selectedKey(x) !== key);
-      localStorage.setItem('lxmusic:selected', JSON.stringify(state.selected));
+      localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
       renderResults();
     }));
 
@@ -400,6 +406,162 @@
     updateSelectionCount();
   }
 
+  function browseArtist(value) {
+    if (Array.isArray(value)) return value.map(item => typeof item === 'string' ? item : item?.name || '').filter(Boolean).join(' / ');
+    if (value && typeof value === 'object') return value.name || value.title || '';
+    return String(value || '');
+  }
+
+  function normalizeBrowseSong(song, platform) {
+    const duration = Number(song.duration || song.interval || 0);
+    return {
+      title: song.name || song.title || song.songName || '未知歌曲',
+      artist: browseArtist(song.singer || song.artist || song.artists || song.ar),
+      album: song.albumName || song.album?.name || song.album || '',
+      duration: duration > 10000 ? Math.round(duration / 1000) : duration,
+      cover_url: song.img || song.cover || song.coverUrl || song.album?.picUrl || '',
+      source_data: {
+        platform,
+        quality: $('quality').value || defaultQuality(),
+        songInfo: song,
+      },
+    };
+  }
+
+  function formatPlayCount(value) {
+    const count = Number(value || 0);
+    if (!count) return '';
+    if (count >= 100000000) return `${(count / 100000000).toFixed(1)} 亿次播放`;
+    if (count >= 10000) return `${(count / 10000).toFixed(1)} 万次播放`;
+    return `${count} 次播放`;
+  }
+
+  function renderBrowseSongs() {
+    const list = $('browseSongs');
+    const selected = new Set(state.selected.map(selectedKey));
+    $('browseDetailTitle').textContent = state.browseTitle || (state.browseMode === 'rank' ? '榜单详情' : '歌单详情');
+    $('browseDetailMeta').textContent = `共 ${state.browseSongs.length} 首歌曲 · ${platformNames[state.browsePlatform] || state.browsePlatform}`;
+    $('selectAllBrowse').textContent = state.browseSongs.length && state.browseSongs.every(item => selected.has(selectedKey(item)))
+      ? '取消全选' : '全选歌曲';
+    if (!state.browseSongs.length) {
+      list.innerHTML = '<div class="empty-state compact-empty"><strong>暂无歌曲</strong><p>该项目没有返回可用的歌曲数据。</p></div>';
+      return;
+    }
+    list.innerHTML = state.browseSongs.map((item, index) => {
+      const checked = selected.has(selectedKey(item));
+      const playing = isPlayingItem(item);
+      return `<article class="result-item">
+        <input class="result-check" type="checkbox" data-browse-check="${index}" ${checked ? 'checked' : ''} aria-label="选择 ${escapeHtml(item.title)}">
+        ${coverMarkup(item.cover_url, item.title)}
+        <div class="result-main">
+          <div class="title">${escapeHtml(item.title)}</div>
+          <div class="sub">${escapeHtml(item.artist || '未知歌手')} · ${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)}</div>
+        </div>
+        <div class="result-side">
+          <div class="result-tags"><span class="badge primary-badge">${escapeHtml(platformNames[state.browsePlatform] || state.browsePlatform)}</span></div>
+          <div class="result-actions">
+            <button class="mini-button play" type="button" data-browse-play="${index}">${playing ? '暂停' : '播放'}</button>
+            <button class="mini-button download" type="button" data-browse-download="${index}">下载</button>
+            <button class="mini-button import" type="button" data-browse-import="${index}">导入</button>
+          </div>
+        </div>
+      </article>`;
+    }).join('');
+    list.querySelectorAll('[data-browse-check]').forEach(input => input.addEventListener('change', event => {
+      const item = state.browseSongs[Number(event.target.dataset.browseCheck)];
+      const key = selectedKey(item);
+      if (event.target.checked && !state.selected.some(entry => selectedKey(entry) === key)) state.selected.push(item);
+      if (!event.target.checked) state.selected = state.selected.filter(entry => selectedKey(entry) !== key);
+      localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+      renderBrowseSongs();
+      renderResults();
+      updateSelectionCount();
+    }));
+    list.querySelectorAll('[data-browse-play]').forEach(button => button.addEventListener('click', () => playPreview(state.browseSongs[Number(button.dataset.browsePlay)], button)));
+    list.querySelectorAll('[data-browse-download]').forEach(button => button.addEventListener('click', () => startDownload(state.browseSongs[Number(button.dataset.browseDownload)], button)));
+    list.querySelectorAll('[data-browse-import]').forEach(button => button.addEventListener('click', () => openSingleImport(state.browseSongs[Number(button.dataset.browseImport)])));
+  }
+
+  async function openBrowseItem(item) {
+    $('browseCatalog').closest('.browse-card').classList.add('hidden');
+    $('browseDetail').classList.remove('hidden');
+    state.browseTitle = item.name || item.title || (state.browseMode === 'rank' ? '榜单详情' : '歌单详情');
+    state.browseSongs = [];
+    renderBrowseSongs();
+    $('browseSongs').innerHTML = '<div class="empty-state compact-empty"><span class="spinner"></span><p>正在加载歌曲…</p></div>';
+    try {
+      const endpoint = state.browseMode === 'rank' ? '/api/leaderboard/list' : '/api/songlist/detail';
+      const resp = await request(`${endpoint}?source_id=${encodeURIComponent(state.browsePlatform)}&id=${encodeURIComponent(item.id)}&page=1&limit=100`);
+      const raw = Array.isArray(resp.data?.list) ? resp.data.list : [];
+      state.browseTitle = resp.data?.name || state.browseTitle;
+      state.browseSongs = raw.map(song => normalizeBrowseSong(song, state.browsePlatform));
+      renderBrowseSongs();
+    } catch (error) {
+      $('browseSongs').innerHTML = `<div class="empty-state compact-empty"><strong>加载失败</strong><p>${escapeHtml(error.message)}</p></div>`;
+    }
+  }
+
+  function renderBrowseCatalog() {
+    const catalog = $('browseCatalog');
+    if (!state.browseCatalog.length) {
+      catalog.innerHTML = '<div class="empty-state compact-empty browse-empty"><strong>暂无内容</strong><p>该平台暂未返回数据，可以切换其他平台。</p></div>';
+      return;
+    }
+    catalog.innerHTML = state.browseCatalog.map((item, index) => {
+      const cover = item.img || item.cover || item.coverUrl || item.coverImgUrl || '';
+      const title = item.name || item.title || '未命名';
+      const meta = item.creator || item.author || formatPlayCount(item.playCount || item.playcount) || item.description || '';
+      return `<button class="browse-item" type="button" data-browse-index="${index}">
+        <span class="browse-cover">${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy">` : '<span class="browse-cover-placeholder">♫</span>'}</span>
+        <span class="browse-item-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta || (state.browseMode === 'rank' ? '点击查看榜单' : '点击查看歌单'))}</small></span>
+      </button>`;
+    }).join('');
+    catalog.querySelectorAll('[data-browse-index]').forEach(button => button.addEventListener('click', () => openBrowseItem(state.browseCatalog[Number(button.dataset.browseIndex)])));
+  }
+
+  async function loadBrowseCatalog(force = false) {
+    const catalog = $('browseCatalog');
+    if (!catalog || (!force && state.browseCatalog.length && $('browsePlatform').value === state.browsePlatform)) return;
+    state.browsePlatform = $('browsePlatform').value;
+    $('browseHeading').textContent = state.browseMode === 'rank' ? '排行榜' : '热门歌单';
+    $('browseDetail').classList.add('hidden');
+    catalog.closest('.browse-card').classList.remove('hidden');
+    catalog.innerHTML = '<div class="empty-state compact-empty browse-empty"><span class="spinner"></span><p>正在加载…</p></div>';
+    try {
+      const endpoint = state.browseMode === 'rank' ? '/api/leaderboard/boards' : '/api/songlist/list';
+      const resp = await request(`${endpoint}?source_id=${encodeURIComponent(state.browsePlatform)}&page=1&limit=30&sort=hot`);
+      state.browseCatalog = Array.isArray(resp.data?.list) ? resp.data.list : [];
+      renderBrowseCatalog();
+    } catch (error) {
+      state.browseCatalog = [];
+      catalog.innerHTML = `<div class="empty-state compact-empty browse-empty"><strong>加载失败</strong><p>${escapeHtml(error.message)}</p></div>`;
+    }
+  }
+
+  document.querySelectorAll('[data-browse-mode]').forEach(button => button.addEventListener('click', () => {
+    state.browseMode = button.dataset.browseMode;
+    state.browseCatalog = [];
+    document.querySelectorAll('[data-browse-mode]').forEach(item => item.classList.toggle('active', item === button));
+    loadBrowseCatalog(true);
+  }));
+  $('browsePlatform').addEventListener('change', () => { state.browseCatalog = []; loadBrowseCatalog(true); });
+  $('refreshBrowse').addEventListener('click', () => loadBrowseCatalog(true));
+  $('browseBack').addEventListener('click', () => {
+    $('browseDetail').classList.add('hidden');
+    $('browseCatalog').closest('.browse-card').classList.remove('hidden');
+  });
+  $('selectAllBrowse').addEventListener('click', () => {
+    const selected = new Set(state.selected.map(selectedKey));
+    const allSelected = state.browseSongs.length && state.browseSongs.every(item => selected.has(selectedKey(item)));
+    const keys = new Set(state.browseSongs.map(selectedKey));
+    if (allSelected) state.selected = state.selected.filter(item => !keys.has(selectedKey(item)));
+    else state.browseSongs.forEach(item => { if (!state.selected.some(entry => selectedKey(entry) === selectedKey(item))) state.selected.push(item); });
+    localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+    renderBrowseSongs();
+    renderResults();
+    updateSelectionCount();
+  });
+
   $('selectAllResults').addEventListener('click', () => {
     const currentKeys = new Set(state.selected.map(selectedKey));
     const allSelected = state.results.every(item => currentKeys.has(selectedKey(item)));
@@ -411,7 +573,7 @@
         if (!state.selected.some(x => selectedKey(x) === selectedKey(item))) state.selected.push(item);
       });
     }
-    localStorage.setItem('lxmusic:selected', JSON.stringify(state.selected));
+    localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
     renderResults();
   });
 
@@ -532,7 +694,7 @@
     }
     $('importList').querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
       state.selected.splice(Number(button.dataset.remove), 1);
-      localStorage.setItem('lxmusic:selected', JSON.stringify(state.selected));
+      localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
       renderImport();
       renderResults();
     }));
@@ -544,7 +706,7 @@
 
   $('clearSelection').addEventListener('click', () => {
     state.selected = [];
-    localStorage.removeItem('lxmusic:selected');
+    localStorage.removeItem('lxbridge:selected');
     renderImport();
     renderResults();
   });
@@ -596,7 +758,7 @@
         fetchLyric: $('fetchLyric').checked,
       });
       state.selected = [];
-      localStorage.removeItem('lxmusic:selected');
+      localStorage.removeItem('lxbridge:selected');
       $('playlistName').value = '';
       $('batchPlaylistTarget').value = '';
       toggleNewPlaylistField('batchPlaylistTarget', 'batchNewPlaylistField');
@@ -972,6 +1134,34 @@
     return `<span class="source-platforms">${platforms.map(id => `<span class="badge">${escapeHtml(platformNames[id] || id)}</span>`).join('')}</span>`;
   }
 
+  async function exportSource(item, button) {
+    const token = getAuthToken();
+    const headers = new Headers();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const path = `/api/sources/export?id=${encodeURIComponent(item.id)}`;
+    const url = withAccessToken(`${root}${path}`, token);
+    setBusy(button, true, '导出中');
+    try {
+      const response = await fetch(url, { headers, credentials: 'same-origin' });
+      if (!response.ok) {
+        const text = await response.text();
+        let message = `HTTP ${response.status}`;
+        try { message = JSON.parse(text)?.msg || message; } catch {}
+        throw new Error(message);
+      }
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = item.filename || `${item.id}.js`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      toast(`已导出音源：${item.name}`);
+    } catch (error) { toast(error.message, 5000); }
+    finally { setBusy(button, false); }
+  }
+
   async function loadSources() {
     try {
       const resp = await request('/api/sources');
@@ -1006,9 +1196,17 @@
             <input type="checkbox" data-toggle="${escapeHtml(item.id)}" ${item.enabled ? 'checked' : ''} ${item.loading ? 'disabled' : ''}>
             <span class="slider"></span>
           </label>
-          <button class="danger-button" type="button" data-delete="${escapeHtml(item.id)}">删除</button>
+          <div class="source-actions">
+            <button class="secondary" type="button" data-export="${escapeHtml(item.id)}">导出</button>
+            <button class="danger-button" type="button" data-delete="${escapeHtml(item.id)}">删除</button>
+          </div>
         </article>`).join('');
       }
+
+      $('sourceList').querySelectorAll('[data-export]').forEach(button => button.addEventListener('click', () => {
+        const item = list.find(source => source.id === button.dataset.export);
+        if (item) exportSource(item, button);
+      }));
 
       $('sourceList').querySelectorAll('[data-toggle]').forEach(input => input.addEventListener('change', async event => {
         event.target.disabled = true;
@@ -1170,7 +1368,7 @@ curl -X POST "${endpoint}" \
   $('refreshSources').addEventListener('click', loadSources);
   $('refreshStatus').addEventListener('click', () => { loadStatus(); loadSources(); });
 
-  try { state.selected = JSON.parse(localStorage.getItem('lxmusic:selected') || '[]'); }
+  try { state.selected = JSON.parse(localStorage.getItem('lxbridge:selected') || localStorage.getItem('lxmusic:selected') || '[]'); }
   catch { state.selected = []; }
 
   syncQualityControls(defaultQuality());
