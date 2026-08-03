@@ -50,16 +50,16 @@
   const musicPlaceholder = '<span class="cover-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6.8l9-1.8v10.2"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="15.2" r="2.5"/></svg></span>';
 
   function defaultQuality() {
-    return localStorage.getItem('lxbridge:defaultQuality') || localStorage.getItem('lxmusic:defaultQuality') || '320k';
+    return localStorage.getItem('neo-lxbridge:defaultQuality') || localStorage.getItem('lxbridge:defaultQuality') || localStorage.getItem('lxmusic:defaultQuality') || '320k';
   }
 
   function allowAutoDowngrade() {
-    return localStorage.getItem('lxbridge:allowAutoDowngrade') !== 'false';
+    return (localStorage.getItem('neo-lxbridge:allowAutoDowngrade') || localStorage.getItem('lxbridge:allowAutoDowngrade')) !== 'false';
   }
 
   function setTheme(mode) {
     const normalized = ['system', 'light', 'dark'].includes(mode) ? mode : 'system';
-    localStorage.setItem('lxbridge:theme', normalized);
+    localStorage.setItem('neo-lxbridge:theme', normalized);
     document.documentElement.dataset.themeMode = normalized;
     if (normalized === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = normalized;
@@ -78,10 +78,10 @@
   document.querySelectorAll('[data-theme-choice]').forEach(button => {
     button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
   });
-  setTheme(localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system');
+  setTheme(localStorage.getItem('neo-lxbridge:theme') || localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system');
   const colorScheme = matchMedia('(prefers-color-scheme: dark)');
   const onSchemeChange = () => {
-    if ((localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system') === 'system') setTheme('system');
+    if ((localStorage.getItem('neo-lxbridge:theme') || localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system') === 'system') setTheme('system');
   };
   if (colorScheme.addEventListener) colorScheme.addEventListener('change', onSchemeChange);
   else if (colorScheme.addListener) colorScheme.addListener(onSchemeChange);
@@ -387,7 +387,7 @@
       const key = selectedKey(item);
       if (event.target.checked && !state.selected.some(x => selectedKey(x) === key)) state.selected.push(item);
       if (!event.target.checked) state.selected = state.selected.filter(x => selectedKey(x) !== key);
-      localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+      localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
       renderResults();
     }));
 
@@ -472,7 +472,7 @@
       const key = selectedKey(item);
       if (event.target.checked && !state.selected.some(entry => selectedKey(entry) === key)) state.selected.push(item);
       if (!event.target.checked) state.selected = state.selected.filter(entry => selectedKey(entry) !== key);
-      localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+      localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
       renderBrowseSongs();
       renderResults();
       updateSelectionCount();
@@ -556,7 +556,7 @@
     const keys = new Set(state.browseSongs.map(selectedKey));
     if (allSelected) state.selected = state.selected.filter(item => !keys.has(selectedKey(item)));
     else state.browseSongs.forEach(item => { if (!state.selected.some(entry => selectedKey(entry) === selectedKey(item))) state.selected.push(item); });
-    localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+    localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
     renderBrowseSongs();
     renderResults();
     updateSelectionCount();
@@ -573,7 +573,7 @@
         if (!state.selected.some(x => selectedKey(x) === selectedKey(item))) state.selected.push(item);
       });
     }
-    localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+    localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
     renderResults();
   });
 
@@ -694,7 +694,7 @@
     }
     $('importList').querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
       state.selected.splice(Number(button.dataset.remove), 1);
-      localStorage.setItem('lxbridge:selected', JSON.stringify(state.selected));
+      localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
       renderImport();
       renderResults();
     }));
@@ -706,7 +706,7 @@
 
   $('clearSelection').addEventListener('click', () => {
     state.selected = [];
-    localStorage.removeItem('lxbridge:selected');
+    localStorage.removeItem('neo-lxbridge:selected');
     renderImport();
     renderResults();
   });
@@ -758,7 +758,7 @@
         fetchLyric: $('fetchLyric').checked,
       });
       state.selected = [];
-      localStorage.removeItem('lxbridge:selected');
+      localStorage.removeItem('neo-lxbridge:selected');
       $('playlistName').value = '';
       $('batchPlaylistTarget').value = '';
       toggleNewPlaylistField('batchPlaylistTarget', 'batchNewPlaylistField');
@@ -1345,8 +1345,8 @@ curl -X POST "${endpoint}" \
   $('copyExternalEndpoint').addEventListener('click', () => copyText($('externalEndpoint').value));
   $('saveSettings').addEventListener('click', () => {
     const value = $('defaultQualitySetting').value || '320k';
-    localStorage.setItem('lxbridge:defaultQuality', value);
-    localStorage.setItem('lxbridge:allowAutoDowngrade', String($('allowAutoDowngrade').checked));
+    localStorage.setItem('neo-lxbridge:defaultQuality', value);
+    localStorage.setItem('neo-lxbridge:allowAutoDowngrade', String($('allowAutoDowngrade').checked));
     syncQualityControls(value);
     toast('默认音质已保存');
   });
@@ -1368,7 +1368,7 @@ curl -X POST "${endpoint}" \
   $('refreshSources').addEventListener('click', loadSources);
   $('refreshStatus').addEventListener('click', () => { loadStatus(); loadSources(); });
 
-  try { state.selected = JSON.parse(localStorage.getItem('lxbridge:selected') || localStorage.getItem('lxmusic:selected') || '[]'); }
+  try { state.selected = JSON.parse(localStorage.getItem('neo-lxbridge:selected') || localStorage.getItem('lxbridge:selected') || localStorage.getItem('lxmusic:selected') || '[]'); }
   catch { state.selected = []; }
 
   syncQualityControls(defaultQuality());

@@ -24,7 +24,7 @@ let initialized = false;
 router.get('/', async (req) => ({
   statusCode: 302,
   headers: {
-    Location: `/api/v1/jsplugin/lxbridge/static/index.html${req.query ? `?${req.query}` : ''}`,
+    Location: `/api/v1/jsplugin/neo-lxbridge/static/index.html${req.query ? `?${req.query}` : ''}`,
   },
   body: '',
 }));
@@ -76,23 +76,23 @@ router.get('/api/platforms', async () => jsonResponse({ sources, capabilities: O
 }])) }));
 
 function normalizeRequest(req: HTTPRequest): HTTPRequest {
-  const prefix = '/api/v1/jsplugin/lxbridge';
+  const prefix = '/api/v1/jsplugin/neo-lxbridge';
   if (req.path === prefix) return { ...req, path: '/' };
   if (req.path.startsWith(`${prefix}/`)) return { ...req, path: req.path.slice(prefix.length) || '/' };
   return req;
 }
 
 async function onInit(): Promise<void> {
-  songloft.log.info('[lxbridge] initializing');
+  songloft.log.info('[neo-lxbridge] initializing');
   await sourceManager.init();
   initialized = true;
-  songloft.log.info(`[lxbridge] initialized, ${runtimeManager.getStatus().length} source runtime(s) active`);
+  songloft.log.info(`[neo-lxbridge] initialized, ${runtimeManager.getStatus().length} source runtime(s) active`);
 }
 
 async function onDeinit(): Promise<void> {
   initialized = false;
   await runtimeManager.destroyAll();
-  songloft.log.info('[lxbridge] deinitialized');
+  songloft.log.info('[neo-lxbridge] deinitialized');
 }
 
 async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
@@ -108,7 +108,7 @@ async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
     };
   } catch (error) {
     const message = String((error as Error)?.message || error || 'unknown error');
-    songloft.log.error(`[lxbridge] HTTP error: ${message}`);
+    songloft.log.error(`[neo-lxbridge] HTTP error: ${message}`);
     return jsonResponse({ code: 500, msg: message, data: null }, 500);
   }
 }

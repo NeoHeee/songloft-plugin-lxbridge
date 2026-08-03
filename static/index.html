@@ -16,7 +16,7 @@
       window.__LX_PLUGIN_ROOT__ = pluginRoot;
       window.__LX_STATIC_ROOT__ = `${pluginRoot}/static`;
 
-      const theme = localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system';
+      const theme = localStorage.getItem('neo-lxbridge:theme') || localStorage.getItem('lxbridge:theme') || localStorage.getItem('lxmusic:theme') || 'system';
       document.documentElement.dataset.themeMode = theme;
       if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
 
@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.4.0</span>
+              <span class="version-badge">v0.5.0</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -394,6 +394,23 @@
                 </span>
               </label>
               <button id="saveSettings" class="primary settings-save" type="button">保存</button>
+            </div>
+          </div>
+
+          <div class="card repository-card">
+            <div class="section-heading settings-heading">
+              <div>
+                <span class="section-kicker">项目信息</span>
+                <h2>GitHub 仓库</h2>
+                <p class="muted">查看源码、版本发布、使用说明和问题反馈。</p>
+              </div>
+            </div>
+            <div class="repository-info">
+              <div class="repository-copy">
+                <span>永久插件标识：<code>neo-lxbridge</code></span>
+                <a href="https://github.com/NeoHeee/songloft-plugin-lxbridge" target="_blank" rel="noopener noreferrer">https://github.com/NeoHeee/songloft-plugin-lxbridge</a>
+              </div>
+              <a class="secondary repository-link" href="https://github.com/NeoHeee/songloft-plugin-lxbridge" target="_blank" rel="noopener noreferrer">打开仓库</a>
             </div>
           </div>
 
