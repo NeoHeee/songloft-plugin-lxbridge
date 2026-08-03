@@ -18,14 +18,35 @@ function decodeSongInfo(encoded: string): MusicInfo {
   catch { throw new Error('song_info 编码无效'); }
 }
 
-function parseTotalBytes(headers: Headers): number | null {
-  const contentRange = headers.get('content-range') || '';
+function headerValue(headers: unknown, name: string): string {
+  const normalized = name.toLowerCase();
+  const value = headers as { get?: (key: string) => string | null; forEach?: (callback: (value: string, key: string) => void) => void } | Record<string, unknown> | null;
+  if (!value) return '';
+  if (typeof value.get === 'function') {
+    try { return String(value.get(name) || value.get(normalized) || ''); } catch { /* fall through */ }
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (key.toLowerCase() === normalized) return String(item || '');
+  }
+  const forEachHeader = (value as { forEach?: (callback: (item: string, key: string) => void) => void }).forEach;
+  if (typeof forEachHeader === 'function') {
+    let found = '';
+    try { forEachHeader.call(value, (item: string, key: string) => { if (key.toLowerCase() === normalized) found = String(item || ''); }); } catch { /* ignore */ }
+    return found;
+  }
+  return '';
+}
+
+function parseTotalBytes(headers: unknown): number | null {
+  const contentRange = headerValue(headers, 'content-range');
   const rangeMatch = contentRange.match(/\/(\d+)\s*$/);
   if (rangeMatch) {
     const total = Number(rangeMatch[1]);
     if (Number.isFinite(total) && total >= 0) return total;
   }
-  const length = Number(headers.get('content-length'));
+  const rawLength = headerValue(headers, 'content-length').trim();
+  if (!rawLength) return null;
+  const length = Number(rawLength);
   return Number.isFinite(length) && length >= 0 ? length : null;
 }
 
@@ -48,24 +69,25 @@ async function probeAudio(url: string, requestHeaders: Record<string, string>) {
     }
     return {
       total_bytes: parseTotalBytes(response.headers),
-      content_type: (response.headers.get('content-type') || '').split(';')[0],
-      accept_ranges: /bytes/i.test(response.headers.get('accept-ranges') || '') || response.status === 206,
+      content_type: headerValue(response.headers, 'content-type').split(';')[0],
+      accept_ranges: /bytes/i.test(headerValue(response.headers, 'accept-ranges')) || response.status === 206,
     };
   };
 
   for (const attempt of [
-    () => inspect('HEAD'),
-    () => inspect('GET', { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' }),
+    { method: 'HEAD', run: () => inspect('HEAD') },
+    { method: 'GET', run: () => inspect('GET', { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' }) },
   ]) {
     try {
-      const result = await attempt();
+      const result = await attempt.run();
       if (result.total_bytes != null) return result;
       errors.push('服务器未返回 Content-Length 或 Content-Range');
       if (result.content_type) {
         return { ...result, probe_error: errors.join('；') };
       }
     } catch (error) {
-      errors.push(errorMessage(error));
+      const message = errorMessage(error);
+      errors.push(message === 'not a function' ? `${attempt.method} 探测不受当前运行环境支持` : message);
     }
   }
 

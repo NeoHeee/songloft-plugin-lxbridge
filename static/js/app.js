@@ -1309,16 +1309,24 @@
     } catch (error) { toast(error.message, 5000); }
   }
 
+  const supportedSourceFile = file => /\.(?:js|zip)$/i.test(String(file?.name || ''));
+
   $('sourceFile').addEventListener('change', event => {
     const files = Array.from(event.target.files || []);
-    $('sourceFileLabel').textContent = files.length
+    const unsupported = files.filter(file => !supportedSourceFile(file));
+    $('sourceFileLabel').textContent = unsupported.length
+      ? `不支持：${unsupported.map(file => file.name).join('、')}`
+      : files.length
       ? files.length === 1 ? files[0].name : `已选择 ${files.length} 个文件`
       : '选择 .js 或 .zip 文件';
+    if (unsupported.length) toast('只支持 .js 或 .zip 文件，请重新选择', 4200);
   });
 
   $('uploadSource').addEventListener('click', async () => {
     const files = $('sourceFile').files;
     if (!files.length) return toast('请选择 .js 或 .zip 文件');
+    const unsupported = Array.from(files).filter(file => !supportedSourceFile(file));
+    if (unsupported.length) return toast(`不支持的文件：${unsupported.map(file => file.name).join('、')}`, 5200);
     const form = new FormData();
     Array.from(files).forEach(file => form.append('file', file));
     const button = $('uploadSource');
