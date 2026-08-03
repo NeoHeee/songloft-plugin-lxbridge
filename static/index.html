@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.5.0</span>
+              <span class="version-badge">v0.5.1</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -210,6 +210,14 @@
               </select>
             </label>
           </div>
+          <form id="browseSearchForm" class="browse-search hidden">
+            <label class="field grow" for="browseKeyword">
+              <span>搜索歌单</span>
+              <input id="browseKeyword" type="search" placeholder="输入歌单名称或关键词" autocomplete="off">
+            </label>
+            <button id="browseSearchButton" class="primary" type="submit">搜索歌单</button>
+            <button id="browseResetSearch" class="secondary hidden" type="button">返回热门歌单</button>
+          </form>
           <div id="browseCatalog" class="browse-grid"></div>
         </div>
 

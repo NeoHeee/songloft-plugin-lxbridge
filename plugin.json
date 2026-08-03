@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/songloft-org/plugin-toolchain/main/schemas/plugin.schema.json",
   "name": "Songloft LxBridge",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "连接洛雪自定义音源与 Songloft：动态音质、扩展音质、自动降级、搜索、播放、导入、下载管理和外部搜索",
   "author": "Neo",
   "homepage": "https://github.com/NeoHeee/songloft-plugin-lxbridge",
@@ -18,7 +18,7 @@
     "jsenv"
   ],
   "staticHash": true,
-  "download_url": "https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/download/v0.5.0/neo-lxbridge-v0.5.0.jsplugin.zip",
+  "download_url": "https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/download/v0.5.1/neo-lxbridge-v0.5.1.jsplugin.zip",
   "icon": "icon.svg",
   "publicPaths": [
     "/external/search",

@@ -504,7 +504,11 @@
   function renderBrowseCatalog() {
     const catalog = $('browseCatalog');
     if (!state.browseCatalog.length) {
-      catalog.innerHTML = '<div class="empty-state compact-empty browse-empty"><strong>暂无内容</strong><p>该平台暂未返回数据，可以切换其他平台。</p></div>';
+      const keyword = $('browseKeyword').value.trim();
+      const copy = state.browseMode === 'playlist' && keyword
+        ? `没有找到与“${escapeHtml(keyword)}”相关的歌单，可以更换关键词或平台。`
+        : '该平台暂未返回数据，可以切换其他平台。';
+      catalog.innerHTML = `<div class="empty-state compact-empty browse-empty"><strong>暂无内容</strong><p>${copy}</p></div>`;
       return;
     }
     catalog.innerHTML = state.browseCatalog.map((item, index) => {
@@ -523,13 +527,17 @@
     const catalog = $('browseCatalog');
     if (!catalog || (!force && state.browseCatalog.length && $('browsePlatform').value === state.browsePlatform)) return;
     state.browsePlatform = $('browsePlatform').value;
-    $('browseHeading').textContent = state.browseMode === 'rank' ? '排行榜' : '热门歌单';
+    const keyword = state.browseMode === 'playlist' ? $('browseKeyword').value.trim() : '';
+    $('browseHeading').textContent = state.browseMode === 'rank' ? '排行榜' : keyword ? `搜索歌单：${keyword}` : '热门歌单';
+    $('browseResetSearch').classList.toggle('hidden', !keyword);
     $('browseDetail').classList.add('hidden');
     catalog.closest('.browse-card').classList.remove('hidden');
     catalog.innerHTML = '<div class="empty-state compact-empty browse-empty"><span class="spinner"></span><p>正在加载…</p></div>';
     try {
-      const endpoint = state.browseMode === 'rank' ? '/api/leaderboard/boards' : '/api/songlist/list';
-      const resp = await request(`${endpoint}?source_id=${encodeURIComponent(state.browsePlatform)}&page=1&limit=30&sort=hot`);
+      const endpoint = state.browseMode === 'rank' ? '/api/leaderboard/boards' : keyword ? '/api/songlist/search' : '/api/songlist/list';
+      const query = new URLSearchParams({ source_id: state.browsePlatform, page: '1', limit: '30' });
+      if (keyword) query.set('keyword', keyword); else query.set('sort', 'hot');
+      const resp = await request(`${endpoint}?${query.toString()}`);
       state.browseCatalog = Array.isArray(resp.data?.list) ? resp.data.list : [];
       renderBrowseCatalog();
     } catch (error) {
@@ -542,8 +550,20 @@
     state.browseMode = button.dataset.browseMode;
     state.browseCatalog = [];
     document.querySelectorAll('[data-browse-mode]').forEach(item => item.classList.toggle('active', item === button));
+    $('browseSearchForm').classList.toggle('hidden', state.browseMode !== 'playlist');
     loadBrowseCatalog(true);
   }));
+  $('browseSearchForm').addEventListener('submit', event => {
+    event.preventDefault();
+    if (!$('browseKeyword').value.trim()) return toast('请输入歌单名称或关键词');
+    state.browseCatalog = [];
+    loadBrowseCatalog(true);
+  });
+  $('browseResetSearch').addEventListener('click', () => {
+    $('browseKeyword').value = '';
+    state.browseCatalog = [];
+    loadBrowseCatalog(true);
+  });
   $('browsePlatform').addEventListener('change', () => { state.browseCatalog = []; loadBrowseCatalog(true); });
   $('refreshBrowse').addEventListener('click', () => loadBrowseCatalog(true));
   $('browseBack').addEventListener('click', () => {
