@@ -62,7 +62,7 @@ jobs:
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          cp dist/lxmusic.jsplugin.zip "dist/lxbridge-v${VERSION}.jsplugin.zip"
+          cp dist/lxbridge.jsplugin.zip "dist/lxbridge-v${VERSION}.jsplugin.zip"
           sha256sum "dist/lxbridge-v${VERSION}.jsplugin.zip" | awk '{print $1}' > "dist/lxbridge-v${VERSION}.jsplugin.zip.sha256"
           zip -qr "dist/songloft-plugin-lxbridge-v${VERSION}-source.zip" . \
             -x '.git/*' 'node_modules/*' 'dist/*'

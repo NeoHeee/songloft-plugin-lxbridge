@@ -196,4 +196,13 @@ export class SourceManager {
   }
 
   async getScript(id: string): Promise<string | null> { return await loadSourceScript(id); }
+
+  async exportScript(id: string): Promise<{ filename: string; script: string }> {
+    const item = this.items.find(source => source.id === id);
+    if (!item) throw new Error('音源不存在');
+    const script = await loadSourceScript(id);
+    if (!script) throw new Error('音源脚本已丢失');
+    const basename = item.filename.replace(/\\/g, '/').split('/').pop()?.trim() || `${item.id}.js`;
+    return { filename: /\.js$/i.test(basename) ? basename : `${basename}.js`, script };
+  }
 }

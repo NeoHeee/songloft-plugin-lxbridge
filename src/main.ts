@@ -24,7 +24,7 @@ let initialized = false;
 router.get('/', async (req) => ({
   statusCode: 302,
   headers: {
-    Location: `/api/v1/jsplugin/lxmusic/static/index.html${req.query ? `?${req.query}` : ''}`,
+    Location: `/api/v1/jsplugin/lxbridge/static/index.html${req.query ? `?${req.query}` : ''}`,
   },
   body: '',
 }));
@@ -54,6 +54,7 @@ router.get('/api/playlists', async () => {
 router.post('/external/search', createExternalSearchRoute(runtimeManager));
 
 router.get('/api/sources', sourceApi.list);
+router.get('/api/sources/export', sourceApi.exportFile);
 router.post('/api/sources/import', sourceApi.importFile);
 router.post('/api/sources/import-url', sourceApi.importUrl);
 router.delete('/api/sources', sourceApi.remove);
@@ -75,7 +76,7 @@ router.get('/api/platforms', async () => jsonResponse({ sources, capabilities: O
 }])) }));
 
 function normalizeRequest(req: HTTPRequest): HTTPRequest {
-  const prefix = '/api/v1/jsplugin/lxmusic';
+  const prefix = '/api/v1/jsplugin/lxbridge';
   if (req.path === prefix) return { ...req, path: '/' };
   if (req.path.startsWith(`${prefix}/`)) return { ...req, path: req.path.slice(prefix.length) || '/' };
   return req;

@@ -2,11 +2,20 @@
 
 Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音源脚本的解析能力接入 Songloft。
 
-> 为兼容从 v0.1.x 原位升级，插件内部入口路径继续使用 `lxmusic`。这是兼容标识，不是未完成的项目更名。
+> v0.4.0 起插件内部标识改为 `lxbridge`，可与使用 `lxmusic` 标识的洛雪插件同时安装。这是一次不兼容变更。
+
+## v0.4.0
+
+当前稳定版本：`v0.4.0`（2026-08-03 发布）。
+
+- 插件内部标识从 `lxmusic` 改为 `lxbridge`，解决与其他洛雪插件的安装冲突；
+- 所有管理页和 API 路径迁移到 `/api/v1/jsplugin/lxbridge`；
+- 音源管理列表新增“导出”按钮，可下载已保存的原始 `.js` 音源脚本；
+- 新增“发现”页面，支持浏览酷我、酷狗、QQ 音乐、网易云和咪咕的排行榜与热门歌单；
+- 榜单和歌单详情中支持试听、下载、单曲导入和批量选择导入；
+- v0.4.0 会作为新插件安装，旧 `lxmusic` 存储不会自动迁移；请在确认原音源脚本可重新导入后再移除旧版。
 
 ## v0.3.4
-
-当前稳定版本：`v0.3.4`（2026-08-03 发布）。
 
 - 保留 `hires` 原始请求参数，不再转换成 `flac24bit`；
 - 新增并区分 `hires`、`flac24bit`、`atmos`、`atmos_plus`、`master`；
@@ -53,14 +62,14 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases) 下载：
 
-- `lxbridge-v0.3.4.jsplugin.zip`：安装包
-- `lxbridge-v0.3.4.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-lxbridge-v0.3.4-source.zip`：源码归档
+- `lxbridge-v0.4.0.jsplugin.zip`：安装包
+- `lxbridge-v0.4.0.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-lxbridge-v0.4.0-source.zip`：源码归档
 
 在 Songloft 插件管理页面上传安装包。管理页面仍位于：
 
 ```text
-/api/v1/jsplugin/lxmusic/static/index.html
+/api/v1/jsplugin/lxbridge/static/index.html
 ```
 
 最低需要 Songloft 2.9.6。
@@ -83,6 +92,11 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 音源与直连接口：
 
 - `GET /api/sources`
+- `GET /api/sources/export?id=...`
+- `GET /api/songlist/list?source_id=...`
+- `GET /api/songlist/detail?source_id=...&id=...`
+- `GET /api/leaderboard/boards?source_id=...`
+- `GET /api/leaderboard/list?source_id=...&id=...`
 - `POST /api/sources/import`
 - `POST /api/sources/import-url`
 - `PUT /api/sources/toggle`
@@ -92,7 +106,7 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 - `GET /api/direct/lyric`
 - `POST /api/search/topone`
 
-所有路径均位于兼容前缀 `/api/v1/jsplugin/lxmusic` 下。
+所有路径均位于前缀 `/api/v1/jsplugin/lxbridge` 下。
 
 ## 构建
 
@@ -106,10 +120,10 @@ npm run validate
 构建产物：
 
 ```text
-dist/lxmusic.jsplugin.zip
+dist/lxbridge.jsplugin.zip
 ```
 
-构建器仍按稳定入口 `lxmusic` 生成内部包名；Release 会将其发布为 `lxbridge-v0.3.4.jsplugin.zip`。
+构建器按入口 `lxbridge` 生成内部包名；Release 会将其发布为 `lxbridge-v0.4.0.jsplugin.zip`。
 
 ## 安全与免责声明
 
