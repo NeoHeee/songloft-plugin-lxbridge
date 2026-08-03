@@ -62,9 +62,9 @@ jobs:
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          cp dist/lxbridge.jsplugin.zip "dist/lxbridge-v${VERSION}.jsplugin.zip"
-          sha256sum "dist/lxbridge-v${VERSION}.jsplugin.zip" | awk '{print $1}' > "dist/lxbridge-v${VERSION}.jsplugin.zip.sha256"
-          zip -qr "dist/songloft-plugin-lxbridge-v${VERSION}-source.zip" . \
+          cp dist/neo-lxbridge.jsplugin.zip "dist/neo-lxbridge-v${VERSION}.jsplugin.zip"
+          sha256sum "dist/neo-lxbridge-v${VERSION}.jsplugin.zip" | awk '{print $1}' > "dist/neo-lxbridge-v${VERSION}.jsplugin.zip.sha256"
+          zip -qr "dist/songloft-plugin-neo-lxbridge-v${VERSION}-source.zip" . \
             -x '.git/*' 'node_modules/*' 'dist/*'
 
       - name: Create or update GitHub Release
@@ -75,6 +75,6 @@ jobs:
           name: v${{ steps.release.outputs.version }}
           generate_release_notes: true
           files: |
-            dist/lxbridge-v${{ steps.release.outputs.version }}.jsplugin.zip
-            dist/lxbridge-v${{ steps.release.outputs.version }}.jsplugin.zip.sha256
-            dist/songloft-plugin-lxbridge-v${{ steps.release.outputs.version }}-source.zip
+            dist/neo-lxbridge-v${{ steps.release.outputs.version }}.jsplugin.zip
+            dist/neo-lxbridge-v${{ steps.release.outputs.version }}.jsplugin.zip.sha256
+            dist/songloft-plugin-neo-lxbridge-v${{ steps.release.outputs.version }}-source.zip

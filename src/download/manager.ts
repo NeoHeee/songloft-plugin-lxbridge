@@ -151,7 +151,7 @@ export class DownloadManager {
       } catch (error) {
         job.status = 'failed';
         job.error = errorMessage(error);
-        songloft.log.error(`[lxbridge] 下载歌曲失败 (${job.title}): ${job.error}`);
+        songloft.log.error(`[neo-lxbridge] 下载歌曲失败 (${job.title}): ${job.error}`);
       } finally {
         job.updated_at = Date.now();
         this.activeBySong.delete(job.song_id);

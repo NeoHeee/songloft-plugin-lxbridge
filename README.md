@@ -2,11 +2,18 @@
 
 Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音源脚本的解析能力接入 Songloft。
 
-> v0.4.0 起插件内部标识改为 `lxbridge`，可与使用 `lxmusic` 标识的洛雪插件同时安装。这是一次不兼容变更。
+> v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
+
+## v0.5.0
+
+当前稳定版本：`v0.5.0`（2026-08-03 发布）。
+
+- 插件永久标识改为 `neo-lxbridge`，同时避开已有插件使用的 `lxmusic` 和 `lxbridge`；
+- 管理页、API、歌曲归属、构建产物和发布文件统一使用 `neo-lxbridge`；
+- 设置页新增 GitHub 仓库地址和永久插件标识信息；
+- 保留对旧 `lxbridge:*` 和 `lxmusic:*` 浏览器设置的读取兼容，新设置写入 `neo-lxbridge:*`。
 
 ## v0.4.0
-
-当前稳定版本：`v0.4.0`（2026-08-03 发布）。
 
 - 插件内部标识从 `lxmusic` 改为 `lxbridge`，解决与其他洛雪插件的安装冲突；
 - 所有管理页和 API 路径迁移到 `/api/v1/jsplugin/lxbridge`；
@@ -62,14 +69,14 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases) 下载：
 
-- `lxbridge-v0.4.0.jsplugin.zip`：安装包
-- `lxbridge-v0.4.0.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-lxbridge-v0.4.0-source.zip`：源码归档
+- `neo-lxbridge-v0.5.0.jsplugin.zip`：安装包
+- `neo-lxbridge-v0.5.0.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v0.5.0-source.zip`：源码归档
 
 在 Songloft 插件管理页面上传安装包。管理页面仍位于：
 
 ```text
-/api/v1/jsplugin/lxbridge/static/index.html
+/api/v1/jsplugin/neo-lxbridge/static/index.html
 ```
 
 最低需要 Songloft 2.9.6。
@@ -106,7 +113,7 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 - `GET /api/direct/lyric`
 - `POST /api/search/topone`
 
-所有路径均位于前缀 `/api/v1/jsplugin/lxbridge` 下。
+所有路径均位于前缀 `/api/v1/jsplugin/neo-lxbridge` 下。
 
 ## 构建
 
@@ -120,10 +127,10 @@ npm run validate
 构建产物：
 
 ```text
-dist/lxbridge.jsplugin.zip
+dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `lxbridge` 生成内部包名；Release 会将其发布为 `lxbridge-v0.4.0.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.5.0.jsplugin.zip`。
 
 ## 安全与免责声明
 
