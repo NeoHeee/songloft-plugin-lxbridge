@@ -1,0 +1,7 @@
+{
+  "name": "Songloft LxBridge 插件源",
+  "includes": [],
+  "plugins": [
+    "https://raw.githubusercontent.com/NeoHeee/songloft-plugin-lxbridge/main/plugin.json"
+  ]
+}
