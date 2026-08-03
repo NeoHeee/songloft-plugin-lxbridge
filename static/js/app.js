@@ -482,6 +482,57 @@
     list.querySelectorAll('[data-browse-import]').forEach(button => button.addEventListener('click', () => openSingleImport(state.browseSongs[Number(button.dataset.browseImport)])));
   }
 
+  function rawBrowseSongKey(song) {
+    const id = song.musicId || song.songmid || song.hash || song.copyrightId || song.id || song.rid || song.audio_id;
+    if (id) return `${state.browsePlatform}:${id}`;
+    return `${state.browsePlatform}:${song.name || song.title || ''}:${browseArtist(song.singer || song.artist || song.artists || song.ar)}`;
+  }
+
+  async function loadAllBrowseSongs(endpoint, itemId) {
+    const maximumSongs = 500;
+    const maximumPages = 50;
+    let page = 1;
+    let pageSize = 50;
+    let total = 0;
+    let totalIsAuthoritative = false;
+    let title = '';
+    let previousSignature = '';
+    const songs = [];
+    const seen = new Set();
+
+    while (page <= maximumPages && songs.length < maximumSongs) {
+      $('browseDetailMeta').textContent = `正在加载第 ${page} 页 · 已获取 ${songs.length} 首`;
+      const resp = await request(`${endpoint}?source_id=${encodeURIComponent(state.browsePlatform)}&id=${encodeURIComponent(itemId)}&page=${page}&limit=${pageSize}`);
+      const batch = Array.isArray(resp.data?.list) ? resp.data.list : [];
+      if (page === 1) {
+        title = resp.data?.name || '';
+        total = Math.max(0, Number(resp.data?.total || 0));
+        totalIsAuthoritative = total > batch.length;
+        if (batch.length > 0 && batch.length < pageSize) pageSize = batch.length;
+      }
+      if (!batch.length) break;
+
+      const signature = batch.map(rawBrowseSongKey).join('|');
+      if (signature && signature === previousSignature) break;
+      previousSignature = signature;
+
+      let added = 0;
+      for (const song of batch) {
+        const key = rawBrowseSongKey(song);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        songs.push(song);
+        added += 1;
+        if (songs.length >= maximumSongs) break;
+      }
+      if (!added) break;
+      if (totalIsAuthoritative && songs.length >= Math.min(total, maximumSongs)) break;
+      if (batch.length < pageSize) break;
+      page += 1;
+    }
+    return { songs, title, total };
+  }
+
   async function openBrowseItem(item) {
     $('browseCatalog').closest('.browse-card').classList.add('hidden');
     $('browseDetail').classList.remove('hidden');
@@ -491,11 +542,13 @@
     $('browseSongs').innerHTML = '<div class="empty-state compact-empty"><span class="spinner"></span><p>正在加载歌曲…</p></div>';
     try {
       const endpoint = state.browseMode === 'rank' ? '/api/leaderboard/list' : '/api/songlist/detail';
-      const resp = await request(`${endpoint}?source_id=${encodeURIComponent(state.browsePlatform)}&id=${encodeURIComponent(item.id)}&page=1&limit=100`);
-      const raw = Array.isArray(resp.data?.list) ? resp.data.list : [];
-      state.browseTitle = resp.data?.name || state.browseTitle;
-      state.browseSongs = raw.map(song => normalizeBrowseSong(song, state.browsePlatform));
+      const result = await loadAllBrowseSongs(endpoint, item.id);
+      state.browseTitle = result.title || state.browseTitle;
+      state.browseSongs = result.songs.map(song => normalizeBrowseSong(song, state.browsePlatform));
       renderBrowseSongs();
+      if (result.total > state.browseSongs.length) {
+        $('browseDetailMeta').textContent = `已加载 ${state.browseSongs.length} / ${result.total} 首 · ${platformNames[state.browsePlatform] || state.browsePlatform}`;
+      }
     } catch (error) {
       $('browseSongs').innerHTML = `<div class="empty-state compact-empty"><strong>加载失败</strong><p>${escapeHtml(error.message)}</p></div>`;
     }
