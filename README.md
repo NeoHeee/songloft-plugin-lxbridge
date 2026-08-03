@@ -93,13 +93,64 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 ## 安装
 
-从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases) 下载：
+### 方式一：通过插件源安装（推荐）
+
+在 Songloft 的插件源管理页面添加以下地址：
+
+```text
+https://raw.githubusercontent.com/NeoHeee/songloft-plugin-lxbridge/main/registry.json
+```
+
+保存并刷新插件源后，选择 `Songloft LxBridge` 安装。以后发布新版本时，也可以通过该插件源检查和安装更新。
+
+插件源必须使用能直接返回 JSON 的 Raw 地址。下面这种带有 `/blob/` 的 GitHub 文件浏览页面返回的是 HTML，**不能**作为插件源地址：
+
+```text
+https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
+```
+
+如果已经添加了错误的 `/blob/` 地址，请先删除，再重新添加上面的 `raw.githubusercontent.com` 地址。
+
+### 方式二：下载 Release 安装包
+
+从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
 - `neo-lxbridge-v0.5.3.jsplugin.zip`：安装包
 - `neo-lxbridge-v0.5.3.jsplugin.zip.sha256`：SHA-256
 - `songloft-plugin-neo-lxbridge-v0.5.3-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传安装包。管理页面仍位于：
+在 Songloft 插件管理页面上传 `neo-lxbridge-v0.5.3.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+
+可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.5.3.jsplugin.zip
+```
+
+命令输出应与 `.sha256` 文件中的值一致。
+
+### 方式三：从源码构建
+
+适合需要审阅或修改代码的用户：
+
+```bash
+git clone https://github.com/NeoHeee/songloft-plugin-lxbridge.git
+cd songloft-plugin-lxbridge
+npm install
+npm run typecheck
+npm run validate
+npm run build
+```
+
+构建完成后，在 Songloft 插件管理页面上传：
+
+```text
+dist/neo-lxbridge.jsplugin.zip
+```
+
+### 安装要求
+
+插件管理页面仍位于：
 
 ```text
 /api/v1/jsplugin/neo-lxbridge/static/index.html
