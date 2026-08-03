@@ -1,6 +1,6 @@
 {
   "name": "songloft-plugin-lxbridge",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Songloft LxBridge：连接洛雪自定义音源与 Songloft，支持动态音质、播放、导入、下载和外部搜索",
   "private": true,
   "scripts": {
