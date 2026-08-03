@@ -1416,6 +1416,42 @@ curl -X POST "${endpoint}" \
   }
 
   $('copyExternalEndpoint').addEventListener('click', () => copyText($('externalEndpoint').value));
+  async function loadDownloadSettings() {
+    try {
+      const resp = await request('/api/settings/download');
+      const targetDir = String(resp.data?.target_dir || '');
+      $('downloadTargetDir').value = targetDir;
+      $('downloadDirectoryState').textContent = targetDir
+        ? `当前新任务将下载到：${targetDir}`
+        : '当前使用 Songloft 默认 downloads 目录';
+    } catch (error) {
+      $('downloadDirectoryState').textContent = `读取下载目录失败：${error.message}`;
+    }
+  }
+
+  $('saveDownloadSettings').addEventListener('click', async () => {
+    const button = $('saveDownloadSettings');
+    setBusy(button, true, '保存中');
+    try {
+      const resp = await request('/api/settings/download', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_dir: $('downloadTargetDir').value.trim() }),
+      });
+      const targetDir = String(resp.data?.target_dir || '');
+      $('downloadTargetDir').value = targetDir;
+      $('downloadDirectoryState').textContent = targetDir
+        ? `已保存：新下载任务将使用 ${targetDir}`
+        : '已恢复 Songloft 默认 downloads 目录';
+      toast(targetDir ? '下载目录已保存，仅影响新任务' : '已恢复默认下载目录');
+    } catch (error) {
+      $('downloadDirectoryState').textContent = `保存失败：${error.message}`;
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+
   $('saveSettings').addEventListener('click', () => {
     const value = $('defaultQualitySetting').value || '320k';
     localStorage.setItem('neo-lxbridge:defaultQuality', value);
@@ -1452,5 +1488,6 @@ curl -X POST "${endpoint}" \
   updatePlayerDock(null, '');
   loadStatus();
   loadDownloads();
+  loadDownloadSettings();
   updateExternalExample(defaultQuality());
 })();

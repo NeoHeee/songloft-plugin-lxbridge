@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.5.3</span>
+              <span class="version-badge">v0.6.0</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -403,6 +403,42 @@
               </label>
               <button id="saveSettings" class="primary settings-save" type="button">保存</button>
             </div>
+          </div>
+
+          <div class="card">
+            <div class="section-heading settings-heading">
+              <div>
+                <span class="section-kicker">下载设置</span>
+                <h2>下载目录</h2>
+                <p class="muted">留空时使用 Songloft 默认 downloads；自定义目录必须位于 Songloft 的 music_path 内。</p>
+              </div>
+            </div>
+            <div class="download-directory-row">
+              <div class="field grow">
+                <label for="downloadTargetDir">目录路径</label>
+                <input id="downloadTargetDir" type="text" placeholder="例如 /音乐 或 /音乐/Songloft" autocomplete="off">
+                <small class="field-help">保存后仅影响新下载任务；自定义目录下会按“歌手-专辑/歌曲”整理，不再额外创建 downloads。现有文件不会移动。</small>
+              </div>
+              <button id="saveDownloadSettings" class="primary settings-save" type="button">保存目录</button>
+            </div>
+            <p id="downloadDirectoryState" class="download-directory-state muted"></p>
+            <details class="download-directory-guide" open>
+              <summary>下载目录使用说明</summary>
+              <div class="download-directory-guide-body">
+                <p><strong>填写容器内路径：</strong>目录必须位于 Songloft 的 <code>music_path</code> 内，不能填写 NAS 文件管理器中的显示名称。</p>
+                <p>例如错误信息显示 <code>music_path = /app/music</code>，要保存到音乐目录下的 LxBridge 文件夹，应填写：</p>
+                <pre>/app/music/LxBridge</pre>
+                <p>如果容器把 <code>/app/music</code> 映射为 NAS 的“音乐”文件夹，最终位置就是：</p>
+                <pre>音乐/LxBridge/歌手-专辑/歌曲文件</pre>
+                <ul>
+                  <li>留空：使用 Songloft 默认 <code>downloads</code> 目录。</li>
+                  <li>自定义目录：按“歌手-专辑/歌曲”整理，不再额外创建 <code>downloads</code>。</li>
+                  <li>保存后仅影响新建下载任务；旧任务点击“重试”仍使用原目录。</li>
+                  <li>已有文件不会自动移动。要应用新目录，请删除失败记录后重新创建下载任务。</li>
+                  <li>提示目录越界或不可写时，请检查 <code>music_path</code>、容器卷映射及写入权限。</li>
+                </ul>
+              </div>
+            </details>
           </div>
 
           <div class="card repository-card">

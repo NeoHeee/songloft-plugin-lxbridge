@@ -1,3 +1,5 @@
+import { downloadDirectoryError } from './settings';
+
 export type DownloadJobStatus = 'queued' | 'downloading' | 'completed' | 'failed';
 
 export interface DownloadJob {
@@ -12,6 +14,7 @@ export interface DownloadJob {
   total_bytes?: number | null;
   actual_quality?: string;
   content_type?: string;
+  target_dir?: string;
   created_at: number;
   updated_at: number;
 }
@@ -27,7 +30,7 @@ export class DownloadManager {
   private draining = false;
   private counter = 0;
 
-  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type'>> = {}): DownloadJob {
+  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir'>> = {}): DownloadJob {
     if (!song.id) throw new Error('歌曲 ID 无效');
 
     if (song.type === 'local') {
@@ -141,7 +144,13 @@ export class DownloadManager {
           job.path = current.file_path || '';
           job.already_downloaded = true;
         } else {
-          const result = await songloft.songs.download(job.song_id, { embed_metadata: true });
+          const result = await songloft.songs.download(job.song_id, {
+            embed_metadata: true,
+            ...(job.target_dir ? {
+              target_dir: job.target_dir,
+              path_template: '{artist}-{album}/{title}',
+            } : {}),
+          });
           if (result.error) throw new Error(result.error);
           job.status = 'completed';
           job.path = result.path || '';
@@ -150,7 +159,8 @@ export class DownloadManager {
         job.error = undefined;
       } catch (error) {
         job.status = 'failed';
-        job.error = errorMessage(error);
+        const rawError = errorMessage(error);
+        job.error = job.target_dir ? downloadDirectoryError(rawError, job.target_dir) : rawError;
         songloft.log.error(`[neo-lxbridge] 下载歌曲失败 (${job.title}): ${job.error}`);
       } finally {
         job.updated_at = Date.now();
