@@ -4,9 +4,17 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v0.5.3
+
+当前稳定版本：`v0.5.3`（2026-08-03 发布）。
+
+- 修复网易云大型歌单显示“已加载 10 / 总数”但无法继续加载的问题；
+- 根据网易云歌单的完整 `trackIds` 按页获取歌曲详情，不再依赖只包含前 10 首的 `tracks` 字段；
+- 网易云歌单和排行榜共用同一套完整分页逻辑。
+
 ## v0.5.2
 
-当前稳定版本：`v0.5.2`（2026-08-03 发布）。
+发布版本：`v0.5.2`（2026-08-03 发布）。
 
 - 修复部分平台搜索歌单后只显示第一页 10 首歌曲的问题；
 - 歌单和排行榜详情会自动按页加载、合并并去重；
@@ -87,9 +95,9 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases) 下载：
 
-- `neo-lxbridge-v0.5.2.jsplugin.zip`：安装包
-- `neo-lxbridge-v0.5.2.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v0.5.2-source.zip`：源码归档
+- `neo-lxbridge-v0.5.3.jsplugin.zip`：安装包
+- `neo-lxbridge-v0.5.3.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v0.5.3-source.zip`：源码归档
 
 在 Songloft 插件管理页面上传安装包。管理页面仍位于：
 
@@ -148,7 +156,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.5.2.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.5.3.jsplugin.zip`。
 
 ## 安全与免责声明
 
