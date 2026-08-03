@@ -11,6 +11,7 @@
     selected: [],
     results: [],
     pollTimer: 0,
+    statusPollTimer: 0,
     playingKey: '',
     playingItem: null,
     playlists: [],
@@ -263,22 +264,29 @@
   document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => activateTab(button.dataset.tab)));
   document.querySelectorAll('[data-go-tab]').forEach(button => button.addEventListener('click', () => activateTab(button.dataset.goTab)));
 
-  function setRuntimeStatus(active) {
+  function setRuntimeStatus(active, loading = false) {
     const warning = $('sourceWarning');
     const status = $('runtimeStatus');
-    warning.classList.toggle('hidden', active > 0);
+    warning.classList.toggle('hidden', active > 0 || loading);
     status.classList.toggle('is-online', active > 0);
-    status.classList.toggle('is-offline', active === 0);
-    status.querySelector('.runtime-title').textContent = active > 0 ? `${active} 个音源正在运行` : '未检测到可用音源';
-    status.querySelector('.runtime-subtitle').textContent = active > 0 ? '已动态读取音质能力，失败时自动降级' : '搜索和歌词仍然可用';
+    status.classList.toggle('is-offline', active === 0 && !loading);
+    status.querySelector('.runtime-title').textContent = active > 0
+      ? `${active} 个音源正在运行`
+      : loading ? '音源正在初始化' : '未检测到可用音源';
+    status.querySelector('.runtime-subtitle').textContent = active > 0
+      ? '已动态读取音质能力，失败时自动降级'
+      : loading ? '正在加载已启用的音源，请稍候' : '搜索和歌词仍然可用';
   }
 
   async function loadStatus() {
+    clearTimeout(state.statusPollTimer);
     try {
       const resp = await request('/api/status');
       const runtimes = resp.data?.runtime_sources || [];
-      setRuntimeStatus(runtimes.length);
+      const loading = resp.data?.source_state?.loading === true;
+      setRuntimeStatus(runtimes.length, loading);
       updateQualityCapabilities(runtimes);
+      if (loading) state.statusPollTimer = setTimeout(loadStatus, 1500);
     } catch (error) { toast(error.message); }
   }
 
@@ -970,7 +978,7 @@
       const data = resp.data || {};
       const list = data.sources || [];
       const enabledCount = list.filter(item => item.enabled && !item.error).length;
-      setRuntimeStatus(enabledCount);
+      setRuntimeStatus(enabledCount, data.loading === true);
       $('batchState').textContent = data.loading
         ? `正在初始化 ${data.batch_current_id || '音源'}，还有 ${data.batch_pending_ids?.length || 0} 个等待处理`
         : list.length ? `共 ${list.length} 个音源，已启用 ${enabledCount} 个` : '尚未导入任何音源';
