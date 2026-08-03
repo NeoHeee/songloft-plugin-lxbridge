@@ -70,7 +70,7 @@ const kw: MusicPlatform = {
     async search(keyword, pageNo = 1, limit = 30) {
       const { body } = await httpFetch(`https://www.kuwo.cn/api/www/search/searchPlayListBykeyWord?key=${encodeURIComponent(keyword)}&pn=${pageNo}&rn=${limit}&httpsStatus=1`, { headers }).promise;
       const data = obj(obj(body).data || body); const rows=arr(data.list || data.data);
-      return { source:'kw', page:pageNo, limit, total:Number(data.total||rows.length), list:rows };
+      return { source:'kw', page:pageNo, limit, total:Number(data.total||rows.length), list:rows.map(x=>{const r=obj(x);return {id:String(r.id||r.pid||r.playlistId||''),name:String(r.name||r.title||r.playlistName||''),img:normalizeCover(r.img||r.pic||r.cover),playCount:Number(r.listencnt||r.playCount||0),creator:String(r.uname||r.creator||''),description:String(r.info||r.description||'')};}).filter(x=>x.id&&x.name) };
     },
     async sorts() { return staticSorts('kw'); },
   },
