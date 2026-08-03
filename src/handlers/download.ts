@@ -4,6 +4,7 @@ import type { DownloadManager } from '../download/manager';
 import { parseJSONBody } from './request';
 import { errorMessage, fail, ok } from './response';
 import { upsertSearchSongs, type SearchSongItem } from './importSongs';
+import { getDownloadTargetDir } from '../download/settings';
 
 interface DownloadRequest {
   song?: SearchSongItem;
@@ -29,7 +30,8 @@ export function downloadHandlers(manager: DownloadManager): {
 
         const current = await songloft.songs.getById(record.id);
         if (!current) throw new Error('无法读取已导入的歌曲记录');
-        const job = manager.enqueue(current, body.download_meta || {});
+        const targetDir = await getDownloadTargetDir();
+        const job = manager.enqueue(current, { ...(body.download_meta || {}), target_dir: targetDir || undefined });
         return ok({ job });
       } catch (error) {
         return fail(errorMessage(error), 400);

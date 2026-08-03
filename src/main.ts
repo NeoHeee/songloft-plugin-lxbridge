@@ -11,6 +11,8 @@ import { importSongsHandler } from './handlers/importSongs';
 import { downloadHandlers } from './handlers/download';
 import { DownloadManager } from './download/manager';
 import { musicSdk, sources } from './musicSdk/facade';
+import { getDownloadTargetDir, setDownloadTargetDir } from './download/settings';
+import { parseJSONBody } from './handlers/request';
 
 const router = createRouter();
 const runtimeManager = new RuntimeManager();
@@ -47,6 +49,20 @@ router.post('/api/songs/download', downloadApi.create);
 router.get('/api/songs/download', downloadApi.status);
 router.post('/api/songs/download/retry', downloadApi.retry);
 router.delete('/api/songs/download', downloadApi.remove);
+router.get('/api/settings/download', async () => jsonResponse({
+  code: 0,
+  msg: 'success',
+  data: { target_dir: await getDownloadTargetDir() },
+}));
+router.put('/api/settings/download', async (req) => {
+  try {
+    const body = parseJSONBody<{ target_dir?: string }>(req);
+    const targetDir = await setDownloadTargetDir(body.target_dir || '');
+    return jsonResponse({ code: 0, msg: 'success', data: { target_dir: targetDir } });
+  } catch (error) {
+    return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
+  }
+});
 router.get('/api/playlists', async () => {
   const playlists = await songloft.playlists.list();
   return jsonResponse({ code: 0, msg: 'success', data: { playlists } });
