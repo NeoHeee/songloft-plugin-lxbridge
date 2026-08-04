@@ -612,6 +612,15 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 }
 .settings-save { min-width: 92px; }
 .download-directory-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px; align-items: end; }
+.download-path-options { display: grid; grid-template-columns: minmax(220px, 1.3fr) minmax(180px, .7fr); gap: 14px; margin: 16px 0; }
+.download-path-options .check-card:last-child { grid-column: 1 / -1; }
+.download-favorites { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin-bottom: 10px; }
+.favorite-directory-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.favorite-directory-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); color: var(--text-soft); font-size: 12px; }
+.favorite-directory-chip button { width: 20px; height: 20px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.favorite-directory-chip button:first-child { width: auto; height: auto; color: var(--text-soft); }
+.download-modal-card { width: min(620px, 100%); }
+.download-modal-options { grid-template-columns: minmax(220px, 1fr) minmax(170px, .7fr); margin-top: 14px; }
 .protection-settings { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
 .protection-toggle { margin-bottom: 14px; }
 .protection-intervals { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 14px; margin-bottom: 14px; }
@@ -701,6 +710,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .result-actions { justify-content: flex-start; }
   .settings-inline-row,
   .download-directory-row,
+  .download-path-options,
+  .download-favorites,
+  .download-modal-options,
   .protection-intervals,
   .endpoint-row,
   .player-dock {

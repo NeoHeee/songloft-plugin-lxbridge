@@ -4,12 +4,13 @@ import type { DownloadManager } from '../download/manager';
 import { parseJSONBody } from './request';
 import { errorMessage, fail, ok } from './response';
 import { upsertSearchSongs, type SearchSongItem } from './importSongs';
-import { getDownloadTargetDir } from '../download/settings';
+import { getDownloadPathSettings, resolveDownloadPathSettings, type DownloadPathSettings } from '../download/settings';
 
 interface DownloadRequest {
   song?: SearchSongItem;
   fetch_lyric?: boolean;
   download_meta?: { total_bytes?: number | null; actual_quality?: string; content_type?: string };
+  download_options?: Partial<DownloadPathSettings>;
 }
 
 export function downloadHandlers(manager: DownloadManager): {
@@ -30,8 +31,13 @@ export function downloadHandlers(manager: DownloadManager): {
 
         const current = await songloft.songs.getById(record.id);
         if (!current) throw new Error('无法读取已导入的歌曲记录');
-        const targetDir = await getDownloadTargetDir();
-        const job = manager.enqueue(current, { ...(body.download_meta || {}), target_dir: targetDir || undefined });
+        const pathSettings = await getDownloadPathSettings();
+        const selectedSettings = resolveDownloadPathSettings(body.download_options || {}, pathSettings);
+        const job = manager.enqueue(current, {
+          ...(body.download_meta || {}),
+          target_dir: selectedSettings.target_dir || undefined,
+          path_template: selectedSettings.target_dir ? selectedSettings.path_template : undefined,
+        });
         return ok({ job });
       } catch (error) {
         return fail(errorMessage(error), 400);
