@@ -612,6 +612,13 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 }
 .settings-save { min-width: 92px; }
 .download-directory-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px; align-items: end; }
+.protection-settings { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+.protection-toggle { margin-bottom: 14px; }
+.protection-intervals { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.protection-intervals.is-disabled { opacity: .5; }
+.protection-guide { margin: 0 0 14px; padding: 13px 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); color: var(--muted); font-size: 12px; line-height: 1.7; }
+.protection-guide strong { color: var(--text-soft); }
+.protection-guide ul { margin: 7px 0 0; padding-left: 18px; }
 .download-directory-state { margin: 10px 0 0; }
 .download-directory-guide { margin-top: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); }
 .download-directory-guide summary { padding: 12px 14px; color: var(--text-soft); cursor: pointer; font-weight: 750; }
@@ -694,6 +701,7 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .result-actions { justify-content: flex-start; }
   .settings-inline-row,
   .download-directory-row,
+  .protection-intervals,
   .endpoint-row,
   .player-dock {
     grid-template-columns: 1fr;

@@ -11,7 +11,7 @@ import { importSongsHandler } from './handlers/importSongs';
 import { downloadHandlers } from './handlers/download';
 import { DownloadManager } from './download/manager';
 import { musicSdk, sources } from './musicSdk/facade';
-import { getDownloadTargetDir, setDownloadTargetDir } from './download/settings';
+import { getDownloadTargetDir, getRequestProtectionSettings, setDownloadTargetDir, setRequestProtectionSettings } from './download/settings';
 import { parseJSONBody } from './handlers/request';
 
 const router = createRouter();
@@ -52,13 +52,14 @@ router.delete('/api/songs/download', downloadApi.remove);
 router.get('/api/settings/download', async () => jsonResponse({
   code: 0,
   msg: 'success',
-  data: { target_dir: await getDownloadTargetDir() },
+  data: { target_dir: await getDownloadTargetDir(), ...(await getRequestProtectionSettings()) },
 }));
 router.put('/api/settings/download', async (req) => {
   try {
-    const body = parseJSONBody<{ target_dir?: string }>(req);
+    const body = parseJSONBody<{ target_dir?: string; enabled?: boolean; download_interval_ms?: number; playback_interval_ms?: number }>(req);
     const targetDir = await setDownloadTargetDir(body.target_dir || '');
-    return jsonResponse({ code: 0, msg: 'success', data: { target_dir: targetDir } });
+    const protection = await setRequestProtectionSettings(body);
+    return jsonResponse({ code: 0, msg: 'success', data: { target_dir: targetDir, ...protection } });
   } catch (error) {
     return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
   }
