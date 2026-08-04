@@ -13,6 +13,7 @@ import { DownloadManager } from './download/manager';
 import { musicSdk, sources } from './musicSdk/facade';
 import { discoverMusicDirectories, getDownloadPathSettings, getRequestProtectionSettings, setDownloadPathSettings, setRequestProtectionSettings } from './download/settings';
 import { parseJSONBody } from './handlers/request';
+import { upgradeHandlers } from './handlers/upgrade';
 
 const router = createRouter();
 const runtimeManager = new RuntimeManager();
@@ -21,6 +22,7 @@ const sourceApi = sourceHandlers(sourceManager);
 const directApi = directHandlers(runtimeManager);
 const downloadManager = new DownloadManager();
 const downloadApi = downloadHandlers(downloadManager);
+const upgradeApi = upgradeHandlers();
 let initialized = false;
 
 router.get('/', async (req) => ({
@@ -49,6 +51,12 @@ router.post('/api/songs/download', downloadApi.create);
 router.get('/api/songs/download', downloadApi.status);
 router.post('/api/songs/download/retry', downloadApi.retry);
 router.delete('/api/songs/download', downloadApi.remove);
+router.get('/api/upgrade/scan', upgradeApi.scan);
+router.post('/api/upgrade/probe-unknown', upgradeApi.probeUnknown);
+router.get('/api/upgrade/probe-tool', upgradeApi.probeToolStatus);
+router.post('/api/upgrade/probe-tool/install', upgradeApi.installProbeTool);
+router.delete('/api/upgrade/probe-tool', upgradeApi.removeProbeTool);
+router.post('/api/upgrade/match', upgradeApi.match);
 router.get('/api/settings/download/directories', async () => {
   try {
     const settings = await getDownloadPathSettings();
