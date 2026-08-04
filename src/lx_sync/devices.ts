@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 import { LX_SYNC_DEVICES_KEY } from './constants';
 import type { LxClientKeyInfo } from './types';
 

@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 /**
  * Minimal message2call implementation compatible with lx-music clients (v0.1.3).
  * Message shape: { name, path?, data?, error? }

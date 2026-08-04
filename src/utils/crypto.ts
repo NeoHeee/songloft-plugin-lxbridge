@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 // 加密工具：优先 Songloft QuickJS polyfill；无 polyfill 时用纯 JS（vitest / 无 crypto 环境）
 // 禁止 require('crypto') / node:crypto —— plugin-builder 会拒绝 Node builtin。
 
@@ -243,4 +246,3 @@ export function generateId(prefix?: string): string {
   if (prefix) return `${prefix}_${timestamp}_${random}`;
   return `${timestamp}_${random}`;
 }
-

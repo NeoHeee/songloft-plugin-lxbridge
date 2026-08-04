@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 import type { HTTPRequest, HTTPResponse } from '@songloft/plugin-sdk';
 import {
   clearAuthRateLimits,

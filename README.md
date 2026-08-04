@@ -4,6 +4,14 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v1.0.1
+
+发布版本：`v1.0.1`。
+
+- 修复插件页面顶部版本徽标仍显示 `v0.9.2` 的问题；
+- 新增版本一致性自动测试，防止页面、包清单和插件清单再次出现版本差异；
+- 第三方归属信息改为 README、相关源码修改声明和现有 `LICENSE` 附录，不再单独分发 `THIRD_PARTY_NOTICES.md`。
+
 ## v1.0.0
 
 发布版本：`v1.0.0`。
@@ -19,6 +27,7 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 使用时，在“洛雪互联”页面开启“LX Music 同步服务”，保存后复制服务地址和密码，再到 LX Music 的“设置 → 数据同步 → 同步服务”中填写。手机连接时应优先使用插件列出的局域网地址；经反向代理访问时需允许 WebSocket 升级。
 
+LX Music 同步协议层基于 Apache-2.0 许可的 [snakeJohn/starlight](https://github.com/snakeJohn/starlight) 适配；原项目版权归其贡献者所有。
 
 ## v0.9.2
 
@@ -211,16 +220,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v1.0.0.jsplugin.zip`：安装包
-- `neo-lxbridge-v1.0.0.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v1.0.0-source.zip`：源码归档
+- `neo-lxbridge-v1.0.1.jsplugin.zip`：安装包
+- `neo-lxbridge-v1.0.1.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v1.0.1-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v1.0.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v1.0.1.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v1.0.0.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v1.0.1.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -305,7 +314,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v1.0.0.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v1.0.1.jsplugin.zip`。
 
 ## 安全与免责声明
 

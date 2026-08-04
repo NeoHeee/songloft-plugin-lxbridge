@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 /**
  * Crypto helpers for LX Music sync protocol.
  * AES-128-ECB (PKCS7), RSA-OAEP-SHA1, gzip envelope (cg_ prefix).

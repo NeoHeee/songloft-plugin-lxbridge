@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 /**
  * LX Music WebSocket sync server (list module).
  * Path: /socket?i={clientId}&t={aes(msgConnect)}

@@ -1,3 +1,6 @@
+// Adapted from snakeJohn/starlight under the Apache License 2.0.
+// Modified for Songloft LxBridge.
+
 /** Max failed /ah attempts per peer before temporary block. */
 export const AUTH_MAX_FAILURES = 8;
 /** Block duration after threshold (ms). */
@@ -80,4 +83,3 @@ export function clearAuthRateLimits(): void {
 export function resetAuthRateLimitForTests(): void {
   clearAuthRateLimits();
 }
-
