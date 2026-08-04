@@ -632,10 +632,18 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .upgrade-score-help-body span { margin-top: 2px; color: var(--muted); }
 .upgrade-score-help-body p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
 .upgrade-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
-.upgrade-probe-note { display: flex; gap: 10px; align-items: flex-start; margin: -4px 0 16px; padding: 13px 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel-soft); color: var(--muted); font-size: 12px; line-height: 1.6; }
-.upgrade-probe-note > strong { flex: 0 0 auto; color: var(--text); white-space: nowrap; font-size: 12px; line-height: 1.6; }
+.upgrade-probe-note { margin: -4px 0 16px; padding: 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel-soft); color: var(--muted); font-size: 12px; line-height: 1.6; }
 .upgrade-probe-note span { font-size: 12px; line-height: 1.6; }
 .upgrade-probe-copy { flex: 1; min-width: 0; }
+.upgrade-probe-intro { display: flex; align-items: baseline; gap: 9px; margin-bottom: 11px; }
+.upgrade-probe-intro strong { color: var(--text); font-size: 13px; }
+.upgrade-probe-intro span { color: var(--muted); }
+.upgrade-probe-features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.upgrade-probe-features > div { padding: 9px 10px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-raised); }
+.upgrade-probe-features strong, .upgrade-probe-features span { display: block; }
+.upgrade-probe-features strong { color: var(--text-soft); font-size: 11px; }
+.upgrade-probe-features span { margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.upgrade-probe-features code { color: var(--text-soft); }
 .upgrade-probe-options { display: grid; grid-template-columns: repeat(2, minmax(150px, 220px)); gap: 10px; margin-top: 10px; }
 .upgrade-probe-options label { color: var(--muted); font-size: 11px; }
 .upgrade-probe-options select { display: block; width: 100%; min-height: 36px; margin-top: 4px; padding: 7px 10px; font-size: 12px; }
@@ -766,6 +774,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .player-close { box-shadow: none; }
 
 @media (max-width: 720px) {
+  .upgrade-probe-intro { display: block; }
+  .upgrade-probe-intro span { display: block; margin-top: 2px; }
+  .upgrade-probe-features { grid-template-columns: 1fr; }
   .result-item {
     grid-template-columns: auto 48px minmax(0, 1fr);
     align-items: start;

@@ -337,9 +337,16 @@
             <span>新版默认保存到 <code>/app/music/LxBridge-Upgrades</code>；旧文件、原歌曲记录和歌单关系始终保留。请试听确认后再自行处理旧版。</span>
           </div>
           <div class="upgrade-probe-note">
-            <strong>未知码率探测</strong>
             <div class="upgrade-probe-copy">
-              <span>优先使用容器已有的 <code>ffprobe</code>；缺失时可自动下载插件私有版本，不修改 Songloft 镜像。数据库保存为 <code>music/...</code> 的相对路径会自动映射到 <code>/app/music/...</code>。仍不可用时根据文件大小和时长保守估算。</span>
+              <div class="upgrade-probe-intro">
+                <strong>未知码率探测</strong>
+                <span>自动选择合适的读取方式，无需修改 Songloft 镜像。</span>
+              </div>
+              <div class="upgrade-probe-features">
+                <div><strong>精确探测</strong><span>优先使用容器现有的 <code>ffprobe</code>，缺失时可安装插件私有版本。</span></div>
+                <div><strong>路径兼容</strong><span>数据库中的 <code>music/...</code> 会自动对应到容器的 <code>/app/music/...</code>。</span></div>
+                <div><strong>安全回退</strong><span>无法直接读取时，根据文件大小与时长生成明确标记的估算码率。</span></div>
+              </div>
               <div class="upgrade-probe-options">
                 <label>每批数量
                   <select id="probeBatchSize">
