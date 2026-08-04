@@ -229,7 +229,8 @@
     const available = availableQualities();
     const known = new Set(qualityCatalog.map(item => item.value));
     const saved = normalizeQuality(preferred || defaultQuality()) || '320k';
-    const custom = Array.from(new Set([...available, saved])).filter(value => value && !known.has(value)).sort();
+    const upgradePreferred = normalizeQuality($('upgradeQuality')?.value) || 'flac';
+    const custom = Array.from(new Set([...available, saved, upgradePreferred])).filter(value => value && !known.has(value)).sort();
     const options = [
       ...qualityCatalog.map(item => ({ ...item, supported: available.has(item.value) })),
       ...custom.map(value => ({ value, label: `扩展音质 · ${value}`, supported: available.has(value) })),
@@ -250,6 +251,14 @@
     search.value = searchResult.usable.includes(saved)
       ? saved
       : searchResult.usable.includes('320k') ? '320k' : searchResult.usable[0] || '';
+    const upgrade = $('upgradeQuality');
+    if (upgrade) {
+      const upgradeResult = render(upgrade, upgradePreferred);
+      upgrade.value = upgradeResult.usable.includes(upgradePreferred)
+        ? upgradePreferred
+        : upgradeResult.usable.includes('flac') ? 'flac'
+          : upgradeResult.usable.includes('320k') ? '320k' : upgradeResult.usable[0] || '';
+    }
     updatePlaybackSettingsState(saved, available.has(saved), search.value);
     updateExternalExample($('quality').value);
   }
