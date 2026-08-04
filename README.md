@@ -9,8 +9,7 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 发布版本：`v1.0.1`。
 
 - 修复插件页面顶部版本徽标仍显示 `v0.9.2` 的问题；
-- 新增版本一致性自动测试，防止页面、包清单和插件清单再次出现版本差异；
-- 第三方归属信息改为 README、相关源码修改声明和现有 `LICENSE` 附录，不再单独分发 `THIRD_PARTY_NOTICES.md`。
+- 新增版本一致性自动测试，防止页面、包清单和插件清单再次出现版本差异。
 
 ## v1.0.0
 
@@ -27,7 +26,7 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 使用时，在“洛雪互联”页面开启“LX Music 同步服务”，保存后复制服务地址和密码，再到 LX Music 的“设置 → 数据同步 → 同步服务”中填写。手机连接时应优先使用插件列出的局域网地址；经反向代理访问时需允许 WebSocket 升级。
 
-LX Music 同步协议层基于 Apache-2.0 许可的 [snakeJohn/starlight](https://github.com/snakeJohn/starlight) 适配；原项目版权归其贡献者所有。
+LX Music 同步协议层基于 Apache-2.0 许可的 snakeJohn/starlight 适配；原项目版权归其贡献者所有。
 
 ## v0.9.2
 
