@@ -15,6 +15,7 @@ export interface DownloadJob {
   actual_quality?: string;
   content_type?: string;
   target_dir?: string;
+  path_template?: string;
   wait_until?: number;
   created_at: number;
   updated_at: number;
@@ -32,7 +33,7 @@ export class DownloadManager {
   private counter = 0;
   private lastAttemptFinishedAt = 0;
 
-  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir'>> = {}): DownloadJob {
+  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir' | 'path_template'>> = {}): DownloadJob {
     if (!song.id) throw new Error('歌曲 ID 无效');
 
     if (song.type === 'local') {
@@ -161,7 +162,7 @@ export class DownloadManager {
             embed_metadata: true,
             ...(job.target_dir ? {
               target_dir: job.target_dir,
-              path_template: '{artist}-{album}/{title}',
+              path_template: job.path_template || '{title}-{artist}',
             } : {}),
           });
           if (result.error) throw new Error(result.error);

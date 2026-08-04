@@ -4,9 +4,23 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v0.8.0
+
+下一版本：`v0.8.0`。
+
+- 自定义目录默认平铺保存，不再按“歌手-专辑”自动创建目录，减少 Songloft 首页产生单曲文件歌单；
+- 支持“歌曲名-歌手名”和“歌手名-歌曲名”两种文件命名顺序；
+- 可选按歌手创建一级文件夹，关闭时歌曲直接保存到目标目录；
+- Docker 环境支持目录简写：`/LxBridge` 自动解析为 `/app/music/LxBridge`；
+- 设置页显示最终实际保存路径，并可管理常用目录；
+- 可从 Songloft 已有歌曲路径中推断目录，作为输入建议；
+- 新增“每次下载前询问目录”，单曲可临时选择目录和命名规则；
+- 新增批量下载选中歌曲，整批只确认一次目录，然后继续按安全间隔串行下载；
+- 下载任务保存目录与命名规则快照，重试不会受后续设置修改影响。
+
 ## v0.7.0
 
-当前稳定版本：`v0.7.0`（2026-08-04 发布）。
+发布版本：`v0.7.0`（2026-08-04 发布）。
 
 - 新增默认开启的“批量下载保护”，下载任务继续严格串行执行；
 - 每首下载成功或失败后默认等待 5 秒，可在设置页调整为 2～60 秒；
@@ -146,16 +160,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v0.7.0.jsplugin.zip`：安装包
-- `neo-lxbridge-v0.7.0.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v0.7.0-source.zip`：源码归档
+- `neo-lxbridge-v0.8.0.jsplugin.zip`：安装包
+- `neo-lxbridge-v0.8.0.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v0.8.0-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v0.7.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v0.8.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.7.0.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.8.0.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -240,7 +254,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.7.0.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.8.0.jsplugin.zip`。
 
 ## 安全与免责声明
 

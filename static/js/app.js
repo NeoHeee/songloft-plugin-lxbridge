@@ -21,6 +21,12 @@
     downloadPollers: {},
     downloadTaskList: [],
     downloadManagerTimer: 0,
+    downloadSettings: {
+      target_dir_input: '', target_dir: '', create_artist_folder: false,
+      filename_order: 'title_artist', ask_each_time: false, favorite_dirs: [],
+    },
+    discoveredDownloadDirs: [],
+    downloadModalResolve: null,
     qualityByPlatform: {},
     legacyQualityPlatforms: new Set(),
     browseMode: 'rank',
@@ -772,6 +778,7 @@
       renderResults();
     }));
     $('importButton').disabled = !state.selected.length;
+    $('batchDownloadButton').disabled = !state.selected.length;
     if (state.playlistsLoaded) populatePlaylistSelect('batchPlaylistTarget');
     toggleNewPlaylistField('batchPlaylistTarget', 'batchNewPlaylistField');
     updateSelectionCount();
@@ -1033,6 +1040,95 @@
     delete state.downloadPollers[key];
   }
 
+  function resolvedDownloadPath(input) {
+    const value = String(input || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!value) return 'Songloft 默认 downloads 目录';
+    if (value === '/app/music' || value.startsWith('/app/music/')) return value;
+    return `/app/music/${value.replace(/^\/+/, '')}`;
+  }
+
+  function currentDownloadOptions() {
+    return {
+      target_dir_input: state.downloadSettings.target_dir_input || '',
+      create_artist_folder: Boolean(state.downloadSettings.create_artist_folder),
+      filename_order: state.downloadSettings.filename_order || 'title_artist',
+    };
+  }
+
+  function updateDownloadModalPreview() {
+    $('downloadModalResolvedPath').textContent = `最终实际路径：${resolvedDownloadPath($('downloadModalTargetDir').value)}`;
+  }
+
+  function closeDownloadModal(result = null) {
+    $('downloadModal').classList.add('hidden');
+    document.body.classList.remove('modal-open');
+    const resolve = state.downloadModalResolve;
+    state.downloadModalResolve = null;
+    if (resolve) resolve(result);
+  }
+
+  function openDownloadModal({ count = 1, item = null, probe = null } = {}) {
+    if (state.downloadModalResolve) closeDownloadModal(null);
+    const defaults = currentDownloadOptions();
+    $('downloadModalTargetDir').value = defaults.target_dir_input;
+    $('downloadModalArtistFolder').checked = defaults.create_artist_folder;
+    $('downloadModalFilenameOrder').value = defaults.filename_order;
+    $('downloadModalSaveDefault').checked = false;
+    const size = probe?.total_bytes == null ? '大小未知' : formatBytes(probe.total_bytes);
+    $('downloadModalSummary').textContent = count > 1
+      ? `本批共 ${count} 首歌曲，只需选择一次目录和命名规则。`
+      : `《${item?.title || '歌曲'}》 · ${probe ? `${probe.actual_quality || probe.requestedQuality} · ${size}` : '请选择本次下载设置'}`;
+    updateDownloadModalPreview();
+    $('downloadModal').classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    return new Promise(resolve => { state.downloadModalResolve = resolve; });
+  }
+
+  $('downloadModalTargetDir').addEventListener('input', updateDownloadModalPreview);
+  $('closeDownloadModal').addEventListener('click', () => closeDownloadModal(null));
+  $('cancelDownloadModal').addEventListener('click', () => closeDownloadModal(null));
+  $('downloadModal').addEventListener('click', event => { if (event.target === $('downloadModal')) closeDownloadModal(null); });
+  $('confirmDownloadModal').addEventListener('click', async () => {
+    const options = {
+      target_dir_input: $('downloadModalTargetDir').value.trim(),
+      create_artist_folder: $('downloadModalArtistFolder').checked,
+      filename_order: $('downloadModalFilenameOrder').value,
+    };
+    if ($('downloadModalSaveDefault').checked) {
+      try {
+        const resp = await saveDownloadPathSettings(options);
+        Object.assign(options, {
+          target_dir_input: resp.target_dir_input,
+          create_artist_folder: resp.create_artist_folder,
+          filename_order: resp.filename_order,
+        });
+      } catch (error) {
+        toast(error.message, 5200);
+        return;
+      }
+    }
+    closeDownloadModal(options);
+  });
+
+  $('batchDownloadButton').addEventListener('click', async () => {
+    if (!state.selected.length) return;
+    const button = $('batchDownloadButton');
+    const options = await openDownloadModal({ count: state.selected.length });
+    if (!options) return;
+    setBusy(button, true, '正在逐首加入队列');
+    const items = [...state.selected];
+    try {
+      for (const item of items) {
+        await startDownload(item, null, { downloadOptions: options, skipConfirm: true });
+      }
+      toast(`已处理 ${items.length} 首歌曲，下载任务将按安全间隔串行执行`, 5200);
+      activateTab('downloads');
+      loadDownloads();
+    } finally {
+      setBusy(button, false);
+    }
+  });
+
   function pollDownload(item, jobId) {
     const key = selectedKey(item);
     clearDownloadPoller(key);
@@ -1066,7 +1162,7 @@
     state.downloadPollers[key] = setTimeout(check, 600);
   }
 
-  async function startDownload(item, button) {
+  async function startDownload(item, button, behavior = {}) {
     const key = selectedKey(item);
     const current = state.downloadJobs[key];
     if (current && ['queued', 'downloading', 'completed'].includes(current.status)) return;
@@ -1077,21 +1173,30 @@
       try {
         probe = await probeDownload(item);
       } catch (error) {
-        const proceed = window.confirm(`无法提前获取《${item.title}》的文件大小：${error.message}\n\n是否仍要继续下载？`);
+        const proceed = behavior.skipConfirm || state.downloadSettings.ask_each_time
+          ? true
+          : window.confirm(`无法提前获取《${item.title}》的文件大小：${error.message}\n\n是否仍要继续下载？`);
         if (!proceed) return;
       }
+      let downloadOptions = behavior.downloadOptions || currentDownloadOptions();
       if (probe) {
         const actualQuality = probe.actual_quality || probe.requestedQuality;
         const sizeLine = probe.total_bytes == null ? '大小未知' : formatBytes(probe.total_bytes);
         const typeLine = probe.content_type ? `\n格式：${probe.content_type}` : '';
         const probeLine = probe.probe_error ? `\n探测说明：${probe.probe_error}` : '';
-        const proceed = window.confirm(
+        const proceed = behavior.skipConfirm || state.downloadSettings.ask_each_time
+          ? true
+          : window.confirm(
           `确认下载《${item.title}》？\n\n请求音质：${probe.requestedQuality}\n实际音质：${actualQuality}${probe.downgraded ? '（已自动降级）' : ''}\n文件大小：${sizeLine}${typeLine}${probeLine}`,
         );
         if (!proceed) return;
         item.source_data.requested_quality = probe.requestedQuality;
         item.source_data.quality = actualQuality;
         item.source_data.allow_downgrade = allowAutoDowngrade();
+      }
+      if (!behavior.downloadOptions && state.downloadSettings.ask_each_time) {
+        downloadOptions = await openDownloadModal({ item, probe });
+        if (!downloadOptions) return;
       }
       setBusy(button, true, '准备中');
       const resp = await request('/api/songs/download', {
@@ -1105,6 +1210,7 @@
             actual_quality: probe.actual_quality || probe.requestedQuality,
             content_type: probe.content_type || '',
           } : {},
+          download_options: downloadOptions,
         }),
       });
       const job = resp.data?.job;
@@ -1431,23 +1537,99 @@ curl -X POST "${endpoint}" \
   }
 
   $('copyExternalEndpoint').addEventListener('click', () => copyText($('externalEndpoint').value));
+  function downloadPathPayload(overrides = {}) {
+    return {
+      target_dir_input: $('downloadTargetDir').value.trim(),
+      create_artist_folder: $('downloadCreateArtistFolder').checked,
+      filename_order: $('downloadFilenameOrder').value,
+      ask_each_time: $('downloadAskEachTime').checked,
+      favorite_dirs: state.downloadSettings.favorite_dirs || [],
+      ...overrides,
+    };
+  }
+
+  function renderDownloadFavorites() {
+    const list = $('downloadFavoriteList');
+    const favorites = state.downloadSettings.favorite_dirs || [];
+    list.innerHTML = favorites.length
+      ? favorites.map((dir, index) => `<span class="favorite-directory-chip"><button type="button" data-use-favorite="${index}" title="使用此目录">${escapeHtml(dir)}</button><button type="button" data-remove-favorite="${index}" title="删除">×</button></span>`).join('')
+      : '<span class="muted">暂未添加常用目录</span>';
+    list.querySelectorAll('[data-use-favorite]').forEach(button => button.addEventListener('click', () => {
+      $('downloadTargetDir').value = favorites[Number(button.dataset.useFavorite)] || '';
+      updateDownloadDirectoryPreview();
+    }));
+    list.querySelectorAll('[data-remove-favorite]').forEach(button => button.addEventListener('click', () => {
+      state.downloadSettings.favorite_dirs.splice(Number(button.dataset.removeFavorite), 1);
+      renderDownloadFavorites();
+      updateDirectorySuggestions();
+    }));
+  }
+
+  function updateDirectorySuggestions() {
+    const values = [...new Set([...(state.downloadSettings.favorite_dirs || []), ...state.discoveredDownloadDirs])];
+    $('downloadDirectorySuggestions').innerHTML = values.map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
+  }
+
+  function updateDownloadDirectoryPreview() {
+    const input = $('downloadTargetDir').value.trim();
+    $('downloadDirectoryState').textContent = input
+      ? `最终实际保存路径：${resolvedDownloadPath(input)}`
+      : '当前使用 Songloft 默认 downloads 目录';
+  }
+
+  async function refreshDownloadDirectories(showMessage = false) {
+    try {
+      const resp = await request('/api/settings/download/directories');
+      state.discoveredDownloadDirs = Array.isArray(resp.data?.discovered) ? resp.data.discovered : [];
+      updateDirectorySuggestions();
+      if (showMessage) toast(`已发现 ${state.discoveredDownloadDirs.length} 个包含歌曲的目录`);
+    } catch (error) {
+      if (showMessage) toast(`读取已有目录失败：${error.message}`, 5200);
+    }
+  }
+
+  async function saveDownloadPathSettings(overrides = {}) {
+    const resp = await request('/api/settings/download', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...downloadPathPayload(overrides), ...protectionPayload() }),
+    });
+    state.downloadSettings = { ...state.downloadSettings, ...(resp.data || {}) };
+    return state.downloadSettings;
+  }
+
   async function loadDownloadSettings() {
     try {
       const resp = await request('/api/settings/download');
-      const targetDir = String(resp.data?.target_dir || '');
-      $('downloadTargetDir').value = targetDir;
+      state.downloadSettings = { ...state.downloadSettings, ...(resp.data || {}) };
+      $('downloadTargetDir').value = String(resp.data?.target_dir_input || '');
+      $('downloadCreateArtistFolder').checked = Boolean(resp.data?.create_artist_folder);
+      $('downloadFilenameOrder').value = resp.data?.filename_order || 'title_artist';
+      $('downloadAskEachTime').checked = Boolean(resp.data?.ask_each_time);
       $('downloadProtectionEnabled').checked = resp.data?.enabled !== false;
       $('downloadIntervalSeconds').value = String(Math.round(Number(resp.data?.download_interval_ms || 5000) / 1000));
       $('playbackIntervalSeconds').value = String(Math.round(Number(resp.data?.playback_interval_ms || 2000) / 1000));
       updateProtectionControls();
       showProtectionState(resp.data);
-      $('downloadDirectoryState').textContent = targetDir
-        ? `当前新任务将下载到：${targetDir}`
-        : '当前使用 Songloft 默认 downloads 目录';
+      updateDownloadDirectoryPreview();
+      renderDownloadFavorites();
+      updateDirectorySuggestions();
+      refreshDownloadDirectories(false);
     } catch (error) {
       $('downloadDirectoryState').textContent = `读取下载目录失败：${error.message}`;
     }
   }
+
+  $('downloadTargetDir').addEventListener('input', updateDownloadDirectoryPreview);
+  $('refreshDownloadDirectories').addEventListener('click', () => refreshDownloadDirectories(true));
+  $('addDownloadFavorite').addEventListener('click', () => {
+    const value = $('downloadFavoriteInput').value.trim();
+    if (!value) return;
+    if (!(state.downloadSettings.favorite_dirs || []).includes(value)) state.downloadSettings.favorite_dirs.push(value);
+    $('downloadFavoriteInput').value = '';
+    renderDownloadFavorites();
+    updateDirectorySuggestions();
+  });
 
   function updateProtectionControls() {
     const enabled = $('downloadProtectionEnabled').checked;
@@ -1480,8 +1662,9 @@ curl -X POST "${endpoint}" \
       const resp = await request('/api/settings/download', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_dir: $('downloadTargetDir').value.trim(), ...protectionPayload() }),
+        body: JSON.stringify({ ...downloadPathPayload(), ...protectionPayload() }),
       });
+      state.downloadSettings = { ...state.downloadSettings, ...(resp.data || {}) };
       $('downloadIntervalSeconds').value = String(Number(resp.data?.download_interval_ms || 5000) / 1000);
       $('playbackIntervalSeconds').value = String(Number(resp.data?.playback_interval_ms || 2000) / 1000);
       showProtectionState(resp.data, true);
@@ -1498,17 +1681,11 @@ curl -X POST "${endpoint}" \
     const button = $('saveDownloadSettings');
     setBusy(button, true, '保存中');
     try {
-      const resp = await request('/api/settings/download', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_dir: $('downloadTargetDir').value.trim(), ...protectionPayload() }),
-      });
-      const targetDir = String(resp.data?.target_dir || '');
-      $('downloadTargetDir').value = targetDir;
-      $('downloadDirectoryState').textContent = targetDir
-        ? `已保存：新下载任务将使用 ${targetDir}`
-        : '已恢复 Songloft 默认 downloads 目录';
-      toast(targetDir ? '下载目录已保存，仅影响新任务' : '已恢复默认下载目录');
+      const data = await saveDownloadPathSettings();
+      $('downloadTargetDir').value = String(data.target_dir_input || '');
+      updateDownloadDirectoryPreview();
+      renderDownloadFavorites();
+      toast(data.target_dir ? `下载设置已保存：${data.target_dir}` : '已恢复默认下载目录');
     } catch (error) {
       $('downloadDirectoryState').textContent = `保存失败：${error.message}`;
       toast(error.message, 5200);

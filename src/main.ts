@@ -11,7 +11,7 @@ import { importSongsHandler } from './handlers/importSongs';
 import { downloadHandlers } from './handlers/download';
 import { DownloadManager } from './download/manager';
 import { musicSdk, sources } from './musicSdk/facade';
-import { getDownloadTargetDir, getRequestProtectionSettings, setDownloadTargetDir, setRequestProtectionSettings } from './download/settings';
+import { discoverMusicDirectories, getDownloadPathSettings, getRequestProtectionSettings, setDownloadPathSettings, setRequestProtectionSettings } from './download/settings';
 import { parseJSONBody } from './handlers/request';
 
 const router = createRouter();
@@ -49,17 +49,31 @@ router.post('/api/songs/download', downloadApi.create);
 router.get('/api/songs/download', downloadApi.status);
 router.post('/api/songs/download/retry', downloadApi.retry);
 router.delete('/api/songs/download', downloadApi.remove);
+router.get('/api/settings/download/directories', async () => {
+  try {
+    const settings = await getDownloadPathSettings();
+    return jsonResponse({ code: 0, msg: 'success', data: { favorites: settings.favorite_dirs, discovered: await discoverMusicDirectories() } });
+  } catch (error) {
+    return jsonResponse({ code: 500, msg: String((error as Error)?.message || error), data: null }, 500);
+  }
+});
 router.get('/api/settings/download', async () => jsonResponse({
   code: 0,
   msg: 'success',
-  data: { target_dir: await getDownloadTargetDir(), ...(await getRequestProtectionSettings()) },
+  data: { ...(await getDownloadPathSettings()), ...(await getRequestProtectionSettings()) },
 }));
 router.put('/api/settings/download', async (req) => {
   try {
-    const body = parseJSONBody<{ target_dir?: string; enabled?: boolean; download_interval_ms?: number; playback_interval_ms?: number }>(req);
-    const targetDir = await setDownloadTargetDir(body.target_dir || '');
+    const body = parseJSONBody<{ target_dir?: string; target_dir_input?: string; create_artist_folder?: boolean; filename_order?: 'title_artist' | 'artist_title'; ask_each_time?: boolean; favorite_dirs?: string[]; enabled?: boolean; download_interval_ms?: number; playback_interval_ms?: number }>(req);
+    const pathSettings = await setDownloadPathSettings({
+      target_dir_input: body.target_dir_input ?? body.target_dir,
+      create_artist_folder: body.create_artist_folder,
+      filename_order: body.filename_order,
+      ask_each_time: body.ask_each_time,
+      favorite_dirs: body.favorite_dirs,
+    });
     const protection = await setRequestProtectionSettings(body);
-    return jsonResponse({ code: 0, msg: 'success', data: { target_dir: targetDir, ...protection } });
+    return jsonResponse({ code: 0, msg: 'success', data: { ...pathSettings, ...protection } });
   } catch (error) {
     return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
   }
