@@ -28,6 +28,7 @@
     playbackSettings: {
       default_quality: '320k', allow_auto_downgrade: true, configured: false,
     },
+    lxSyncSettings: null,
     discoveredDownloadDirs: [],
     downloadModalResolve: null,
     upgradeSongs: [],
@@ -35,6 +36,8 @@
     upgradeUnknownTotal: 0,
     upgradeUnknownExpanded: false,
     upgradeCandidates: {},
+    upgradeSelected: new Set(),
+    upgradeSearch: '',
     qualityByPlatform: {},
     legacyQualityPlatforms: new Set(),
     browseMode: 'rank',
@@ -309,7 +312,10 @@
     if (name === 'downloads') loadDownloads();
     if (name === 'browse') loadBrowseCatalog();
     if (name === 'sources') loadSources();
-    if (name === 'settings') updateExternalExample($('defaultQualitySetting').value || defaultQuality());
+    if (name === 'lx-sync') loadLxSyncSettings();
+    if (name === 'settings') {
+      updateExternalExample($('defaultQualitySetting').value || defaultQuality());
+    }
   }
 
   document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => activateTab(button.dataset.tab)));
@@ -965,6 +971,21 @@
     return `${size >= 100 ? size.toFixed(0) : size >= 10 ? size.toFixed(1) : size.toFixed(2)} ${units[unit]}`;
   }
 
+  function filteredUpgradeSongs() {
+    const keyword = String(state.upgradeSearch || '').trim().toLowerCase();
+    if (!keyword) return state.upgradeSongs;
+    return state.upgradeSongs.filter(song => [song.title, song.artist, song.album, song.file_path]
+      .some(value => String(value || '').toLowerCase().includes(keyword)));
+  }
+
+  async function requestUpgradeCandidates(songId) {
+    const resp = await request('/api/upgrade/match', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ song_id: songId, quality: $('upgradeQuality').value, max_duration_diff: Number($('upgradeDurationDiff').value) }),
+    });
+    return resp.data?.candidates || [];
+  }
+
   function renderUpgradeSongs() {
     const list = $('upgradeSongList');
     if (!list) return;
@@ -972,16 +993,22 @@
       list.innerHTML = '<div class="empty-state compact-empty"><strong>没有符合条件的歌曲</strong><p>可以提高扫描码率阈值后重新扫描。</p></div>';
       return;
     }
-    list.innerHTML = state.upgradeSongs.map(song => {
+    const visibleSongs = filteredUpgradeSongs();
+    if (!visibleSongs.length) {
+      list.innerHTML = '<div class="empty-state compact-empty"><strong>没有匹配的扫描结果</strong><p>请更换歌名、歌手或路径关键词。</p></div>';
+      return;
+    }
+    list.innerHTML = visibleSongs.map(song => {
       const candidates = state.upgradeCandidates[song.id];
       const candidateMarkup = Array.isArray(candidates)
         ? (candidates.length ? `<div class="upgrade-candidates">${candidates.map((item, index) => `<div class="upgrade-candidate">
-            <div class="upgrade-candidate-copy"><strong>${escapeHtml(item.title)} · ${escapeHtml(item.artist || '未知歌手')}</strong><span>${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)} · 时长差 ${Number(item.duration_diff || 0).toFixed(1)} 秒 · 匹配分 ${Math.round(Number(item.match_score || 0))}</span>${upgradeCandidateProbeMarkup(item)}</div>
+            <div class="upgrade-candidate-copy"><strong>${index === 0 ? '<em class="upgrade-best-badge">最佳匹配</em>' : ''}${escapeHtml(item.title)} · ${escapeHtml(item.artist || '未知歌手')}</strong><span>${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)} · 时长差 ${Number(item.duration_diff || 0).toFixed(1)} 秒 · 匹配分 ${Math.round(Number(item.match_score || 0))}</span>${upgradeCandidateProbeMarkup(item)}</div>
             <button class="mini-button download" type="button" data-upgrade-download="${song.id}" data-candidate-index="${index}">下载新版</button>
           </div>`).join('')}</div>` : '<p class="muted">没有找到满足歌名、歌手和时长条件的安全候选。</p>')
         : '';
       return `<article class="upgrade-song-item">
         <div class="upgrade-song-header">
+          <label class="upgrade-song-select" title="加入批量操作"><input type="checkbox" data-upgrade-select="${song.id}" ${state.upgradeSelected.has(Number(song.id)) ? 'checked' : ''}></label>
           <div class="upgrade-song-copy"><strong>${escapeHtml(song.title)} · ${escapeHtml(song.artist || '未知歌手')}</strong><span>${escapeHtml(String(song.format || '未知格式').toUpperCase())} · ${Number(song.bitrate_kbps || 0)} kbps${song.bitrate_source === 'estimated' ? '（估算）' : ''} · ${formatDuration(song.duration)} · ${escapeHtml(song.file_path || '')}</span></div>
           <button class="secondary" type="button" data-upgrade-match="${song.id}">匹配高音质版本</button>
         </div>
@@ -992,11 +1019,7 @@
       const songId = Number(button.dataset.upgradeMatch);
       setBusy(button, true, '匹配中');
       try {
-        const resp = await request('/api/upgrade/match', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ song_id: songId, quality: $('upgradeQuality').value, max_duration_diff: Number($('upgradeDurationDiff').value) }),
-        });
-        state.upgradeCandidates[songId] = resp.data?.candidates || [];
+        state.upgradeCandidates[songId] = await requestUpgradeCandidates(songId);
         state.upgradeCandidates[songId].forEach(item => { item._probe_status = 'loading'; });
         renderUpgradeSongs();
         for (const item of state.upgradeCandidates[songId]) {
@@ -1012,6 +1035,11 @@
       } catch (error) {
         toast(`匹配失败：${error.message}`, 6200);
       } finally { setBusy(button, false); }
+    }));
+    list.querySelectorAll('[data-upgrade-select]').forEach(input => input.addEventListener('change', () => {
+      const songId = Number(input.dataset.upgradeSelect);
+      if (input.checked) state.upgradeSelected.add(songId);
+      else state.upgradeSelected.delete(songId);
     }));
     list.querySelectorAll('[data-upgrade-download]').forEach(button => button.addEventListener('click', async () => {
       const songId = Number(button.dataset.upgradeDownload);
@@ -1117,6 +1145,7 @@
       state.upgradeUnknownSongs = resp.data?.unknown_songs || [];
       state.upgradeUnknownTotal = Number(resp.data?.statistics?.bitrate_unknown || state.upgradeUnknownSongs.length);
       state.upgradeCandidates = {};
+      state.upgradeSelected = new Set(state.upgradeSongs.map(song => Number(song.id)));
       $('upgradeScanState').textContent = `找到 ${state.upgradeSongs.length} 首严格低于 ${bitrate} kbps、具有本地路径且码率已识别的歌曲；恰好 ${bitrate} kbps 不计入。`;
       renderUpgradeStatistics(resp.data?.statistics);
       renderUnknownSongs();
@@ -1216,7 +1245,81 @@
     } finally { setBusy(button, false); }
   }
 
+  async function batchMatchUpgradeSongs() {
+    const songs = state.upgradeSongs.filter(song => state.upgradeSelected.has(Number(song.id)));
+    if (!songs.length) return toast('请先勾选需要匹配的歌曲');
+    if (!confirm(`将逐首搜索 ${songs.length} 首歌曲，并自动选择每首匹配分最高的安全候选。\n\n搜索请求不会并发，每首之间等待 1 秒，是否继续？`)) return;
+    const button = $('batchMatchUpgradeSongs');
+    setBusy(button, true, `匹配 0/${songs.length}`);
+    let matched = 0;
+    let failed = 0;
+    try {
+      for (let index = 0; index < songs.length; index += 1) {
+        const song = songs[index];
+        $('upgradeScanState').textContent = `正在批量匹配 ${index + 1}/${songs.length}：《${song.title}》；请求逐首执行并保留安全间隔。`;
+        try {
+          const candidates = await requestUpgradeCandidates(Number(song.id));
+          state.upgradeCandidates[song.id] = candidates;
+          if (candidates.length) matched += 1;
+          else failed += 1;
+        } catch {
+          state.upgradeCandidates[song.id] = [];
+          failed += 1;
+        }
+        setBusy(button, true, `匹配 ${index + 1}/${songs.length}`);
+        renderUpgradeSongs();
+        if (index < songs.length - 1) await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      $('upgradeScanState').textContent = `批量匹配完成：${matched} 首已选择匹配分最高的安全候选，${failed} 首没有合格候选。`;
+      toast(`批量匹配完成：最佳候选 ${matched} 首，无合格候选 ${failed} 首`, 6200);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function batchDownloadUpgradeSongs() {
+    const songs = state.upgradeSongs.filter(song => state.upgradeSelected.has(Number(song.id)) && state.upgradeCandidates[song.id]?.[0]);
+    if (!songs.length) return toast('没有已匹配的最佳候选，请先执行批量匹配');
+    if (!confirm(`将为 ${songs.length} 首歌曲下载各自匹配分最高的安全候选。\n\n目标音质：${$('upgradeQuality').selectedOptions[0]?.textContent || $('upgradeQuality').value}\n保存目录：${resolvedDownloadPath($('upgradeTargetDir').value)}\n\n任务会串行执行并遵守下载安全间隔，是否继续？`)) return;
+    const button = $('batchDownloadUpgradeSongs');
+    setBusy(button, true, `加入 0/${songs.length}`);
+    try {
+      for (let index = 0; index < songs.length; index += 1) {
+        const song = songs[index];
+        const candidate = state.upgradeCandidates[song.id][0];
+        $('upgradeScanState').textContent = `正在处理最佳候选 ${index + 1}/${songs.length}：《${song.title}》。`;
+        await startDownload(candidate, null, {
+          downloadOptions: { target_dir_input: $('upgradeTargetDir').value.trim() || '/LxBridge-Upgrades', create_artist_folder: false, filename_order: 'title_artist' },
+          skipConfirm: true,
+          allowDowngrade: false,
+          requireProbe: true,
+          upgradeMeta: { source_song_id: Number(song.id), source_bitrate: song.bitrate_kbps || 0, target_quality: $('upgradeQuality').value },
+        });
+        setBusy(button, true, `加入 ${index + 1}/${songs.length}`);
+      }
+      $('upgradeScanState').textContent = `已处理 ${songs.length} 首最佳候选，下载任务将按照安全间隔串行执行。`;
+      toast(`已将 ${songs.length} 首最佳候选加入安全下载队列`, 6200);
+      activateTab('downloads');
+      loadDownloads();
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   $('scanUpgradeSongs').addEventListener('click', scanUpgradeSongs);
+  $('upgradeSearch').addEventListener('input', event => {
+    state.upgradeSearch = event.target.value;
+    renderUpgradeSongs();
+  });
+  $('toggleUpgradeSelection').addEventListener('click', () => {
+    const visibleIds = filteredUpgradeSongs().map(song => Number(song.id));
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => state.upgradeSelected.has(id));
+    visibleIds.forEach(id => allSelected ? state.upgradeSelected.delete(id) : state.upgradeSelected.add(id));
+    $('toggleUpgradeSelection').textContent = allSelected ? '全选当前结果' : '取消当前全选';
+    renderUpgradeSongs();
+  });
+  $('batchMatchUpgradeSongs').addEventListener('click', batchMatchUpgradeSongs);
+  $('batchDownloadUpgradeSongs').addEventListener('click', batchDownloadUpgradeSongs);
   $('probeUnknownBitrates').addEventListener('click', probeUnknownBitrates);
   $('refreshProbeTool').addEventListener('click', loadProbeToolStatus);
   $('installProbeTool').addEventListener('click', installProbeTool);
@@ -1851,6 +1954,112 @@ curl -X POST "${endpoint}" \
   }
 
   $('copyExternalEndpoint').addEventListener('click', () => copyText($('externalEndpoint').value));
+
+  function renderLxSyncSettings(settings) {
+    state.lxSyncSettings = settings || {};
+    $('lxSyncEnabled').checked = Boolean(settings?.enabled);
+    $('lxSyncServerName').value = settings?.serverName || 'Songloft LxBridge';
+    $('lxSyncPassword').value = settings?.password || '';
+    $('lxSyncCustomAddress').value = settings?.customServerAddress || '';
+    const detectedAddresses = Array.isArray(settings?.serverAddresses) ? settings.serverAddresses : [];
+    const customAddress = String(settings?.customServerAddress || '');
+    const browserAddress = `${location.origin}${root}`.replace(/\/$/, '');
+    const browserIsLocal = /:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/)/i.test(browserAddress);
+    const addresses = [...new Set([
+      ...(customAddress ? [customAddress] : []),
+      ...(!browserIsLocal ? [browserAddress] : []),
+      ...detectedAddresses,
+      ...(browserIsLocal ? [browserAddress] : []),
+    ])];
+    $('lxSyncAddress').innerHTML = addresses.length
+      ? addresses.map(address => {
+          const local = /:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/)/i.test(address);
+          const type = customAddress && address === customAddress
+            ? '自定义'
+            : address === browserAddress
+              ? local ? '当前本机访问' : '当前访问（推荐）'
+              : local ? '本机' : '容器探测';
+          return `<option value="${escapeHtml(address)}">${type} · ${escapeHtml(address)}</option>`;
+        }).join('')
+      : '<option value="">暂未发现可用地址</option>';
+    $('lxSyncConnectedCount').textContent = String(settings?.connectedCount || 0);
+    $('lxSyncDeviceCount').textContent = String(settings?.devices?.length || 0);
+    $('lxSyncMappedCount').textContent = String(settings?.mappedPlaylists || 0);
+    $('lxSyncLastSync').textContent = settings?.lastSyncAt
+      ? `上次同步：${new Date(settings.lastSyncAt).toLocaleString()}`
+      : '尚未同步';
+    $('lxSyncState').textContent = settings?.enabled
+      ? '同步服务已开启。请确保防火墙和反向代理允许 WebSocket 连接。'
+      : '同步服务默认关闭，开启并保存后才接受 LX Music 连接。';
+  }
+
+  async function loadLxSyncSettings() {
+    try {
+      const resp = await request('/api/settings/lx-sync');
+      renderLxSyncSettings(resp.data);
+    } catch (error) {
+      $('lxSyncState').textContent = `读取同步设置失败：${error.message}`;
+      $('lxSyncState').classList.add('is-warning');
+    }
+  }
+
+  async function saveLxSyncSettings(extra = {}) {
+    const resp = await request('/api/settings/lx-sync', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: $('lxSyncEnabled').checked,
+        serverName: $('lxSyncServerName').value.trim(),
+        customServerAddress: $('lxSyncCustomAddress').value.trim(),
+        ...extra,
+      }),
+    });
+    renderLxSyncSettings(resp.data);
+    return resp.data;
+  }
+
+  $('copyLxSyncPassword').addEventListener('click', () => copyText($('lxSyncPassword').value));
+  $('copyLxSyncAddress').addEventListener('click', () => copyText($('lxSyncAddress').value));
+  $('resetLxSyncAddress').addEventListener('click', async () => {
+    const button = $('resetLxSyncAddress');
+    $('lxSyncCustomAddress').value = '';
+    setBusy(button, true, '恢复中');
+    try {
+      await saveLxSyncSettings({ customServerAddress: '' });
+      toast('已恢复自动探测地址');
+    } catch (error) {
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+  $('saveLxSyncSettings').addEventListener('click', async () => {
+    const button = $('saveLxSyncSettings');
+    setBusy(button, true, '保存中');
+    try {
+      await saveLxSyncSettings();
+      toast('LX Music 同步设置已保存');
+    } catch (error) {
+      $('lxSyncState').textContent = `保存失败：${error.message}`;
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+  $('regenerateLxSyncPassword').addEventListener('click', async () => {
+    if (!confirm('重置密码会撤销全部已授权设备，并断开当前同步连接。确定继续吗？')) return;
+    const button = $('regenerateLxSyncPassword');
+    setBusy(button, true, '重置中');
+    try {
+      await saveLxSyncSettings({ regeneratePassword: true });
+      toast('同步密码已重置，请在 LX Music 中重新连接');
+    } catch (error) {
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+
   function downloadPathPayload(overrides = {}) {
     return {
       target_dir_input: $('downloadTargetDir').value.trim(),
@@ -2093,6 +2302,7 @@ curl -X POST "${endpoint}" \
   updatePlayerDock(null, '');
   loadStatus();
   loadPlaybackSettings();
+  loadLxSyncSettings();
   loadDownloads();
   loadDownloadSettings();
   updateExternalExample(defaultQuality());

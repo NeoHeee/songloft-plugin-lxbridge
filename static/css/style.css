@@ -612,6 +612,7 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 }
 .settings-save { min-width: 92px; }
 .download-directory-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px; align-items: end; }
+.download-directory-help { display: block; margin-top: 7px; }
 .download-path-options { display: grid; grid-template-columns: minmax(220px, 1.3fr) minmax(180px, .7fr); gap: 14px; margin: 16px 0; }
 .download-path-options .check-card:last-child { grid-column: 1 / -1; }
 .download-favorites { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin-bottom: 10px; }
@@ -631,6 +632,12 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .upgrade-score-help-body strong, .upgrade-score-help-body span { display: block; font-size: 11px; line-height: 1.55; }
 .upgrade-score-help-body span { margin-top: 2px; color: var(--muted); }
 .upgrade-score-help-body p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.upgrade-batch-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) auto auto auto; gap: 10px; align-items: end; margin: 0 0 8px; }
+.upgrade-batch-toolbar button { white-space: nowrap; }
+.upgrade-batch-help { margin: 0 0 12px; font-size: 11px; line-height: 1.6; }
+.upgrade-song-select { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); cursor: pointer; }
+.upgrade-song-select input { width: 16px; height: 16px; accent-color: var(--primary); }
+.upgrade-best-badge { display: inline-block; margin-right: 7px; padding: 2px 6px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: 10px; font-style: normal; vertical-align: 1px; }
 .upgrade-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
 .upgrade-probe-note { margin: -4px 0 16px; padding: 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel-soft); color: var(--muted); font-size: 12px; line-height: 1.6; }
 .upgrade-probe-note span { font-size: 12px; line-height: 1.6; }
@@ -781,6 +788,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 @media (max-width: 720px) {
   #tab-upgrade .section-heading.row.between { align-items: stretch; flex-direction: column; }
   .upgrade-heading-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .upgrade-batch-toolbar { grid-template-columns: 1fr 1fr; }
+  .upgrade-search-field { grid-column: 1 / -1; }
   .upgrade-heading-actions button { width: 100%; min-width: 0; padding-inline: 10px; }
   .upgrade-safety-note { flex-direction: column; gap: 4px; }
   .upgrade-probe-intro { display: block; }
@@ -794,6 +803,7 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .upgrade-unknown-heading { align-items: flex-start; flex-direction: column; }
   .upgrade-unknown-heading button { width: 100%; }
   .upgrade-song-header, .upgrade-candidate { align-items: stretch; flex-direction: column; }
+  .upgrade-song-select { width: 100%; height: 34px; }
   .upgrade-song-header > .secondary, .upgrade-candidate > .mini-button { width: 100%; }
   .upgrade-candidate-media { gap: 5px; }
   .result-item {
@@ -826,7 +836,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 }
 
 @media (max-width: 470px) {
-  .upgrade-heading-actions, .upgrade-probe-options, .upgrade-scan-summary { grid-template-columns: 1fr; }
+  .upgrade-heading-actions, .upgrade-probe-options, .upgrade-scan-summary, .upgrade-batch-toolbar { grid-template-columns: 1fr; }
+  .upgrade-search-field { grid-column: auto; }
   .upgrade-probe-note { padding: 12px; }
   .upgrade-song-item { padding: 11px; }
   .upgrade-format-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1392,6 +1403,20 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   color: var(--warning, #d89222);
 }
 
+.lx-sync-card { overflow: hidden; }
+.switch-label { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); color: var(--text-soft); font-size: 13px; font-weight: 700; cursor: pointer; }
+.switch-label input { width: 18px; height: 18px; accent-color: var(--primary); }
+.lx-sync-grid { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(240px, 1fr); gap: 14px; }
+.lx-sync-address-field { grid-column: 1 / -1; }
+.lx-sync-status { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.lx-sync-status span { padding: 7px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 11px; }
+.lx-sync-status strong { color: var(--text-soft); }
+.lx-sync-guide { margin-top: 14px; padding: 13px 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); color: var(--muted); font-size: 12px; line-height: 1.7; }
+.lx-sync-guide strong { color: var(--text-soft); }
+.lx-sync-guide ul { margin: 7px 0 0; padding-left: 18px; }
+.lx-sync-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.lx-sync-actions button { min-width: 170px; }
+
 /* Mobile layout hardening */
 @media (max-width: 720px) {
   .topbar-inner,
@@ -1408,6 +1433,12 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
     max-width: 100%;
     box-sizing: border-box;
   }
+
+  .lx-sync-grid { grid-template-columns: 1fr; }
+  .lx-sync-address-field { grid-column: auto; }
+  .lx-sync-card .endpoint-copy-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .lx-sync-card .endpoint-input { min-width: 0; }
+  .lx-sync-actions button { flex: 1 1 100%; width: 100%; }
 
   .topbar-inner { gap: 10px; }
   .brand { min-width: 0; }
@@ -1463,4 +1494,6 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .result-actions { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .result-actions .mini-button { width: 100%; min-width: 0; padding-inline: 5px; }
   .download-actions > button { flex: 1 1 110px; }
+  .lx-sync-card .endpoint-copy-row { grid-template-columns: 1fr; }
+  .lx-sync-card .endpoint-copy-row button { width: 100%; }
 }

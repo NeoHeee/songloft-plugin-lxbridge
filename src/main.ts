@@ -1,5 +1,5 @@
 /// <reference types="@songloft/plugin-sdk" />
-import type { HTTPRequest, HTTPResponse } from '@songloft/plugin-sdk';
+import type { HTTPRequest, HTTPResponse, InboundWebSocket, WebSocketRequest } from '@songloft/plugin-sdk';
 import { createRouter, jsonResponse } from '@songloft/plugin-sdk';
 import { RuntimeManager } from './engine/manager';
 import { SourceManager } from './source/manager';
@@ -15,6 +15,9 @@ import { discoverMusicDirectories, getDownloadPathSettings, getRequestProtection
 import { parseJSONBody } from './handlers/request';
 import { upgradeHandlers } from './handlers/upgrade';
 import { getPlaybackSettings, setPlaybackSettings } from './playback/settings';
+import { handleLxProtocolHttp } from './lx_sync/protocol_http';
+import { handleLxSyncWebSocket } from './lx_sync/protocol_ws';
+import { LxSyncService } from './lx_sync/service';
 
 const router = createRouter();
 const runtimeManager = new RuntimeManager();
@@ -24,6 +27,7 @@ const directApi = directHandlers(runtimeManager);
 const downloadManager = new DownloadManager();
 const downloadApi = downloadHandlers(downloadManager);
 const upgradeApi = upgradeHandlers();
+const lxSyncService = new LxSyncService();
 let initialized = false;
 
 router.get('/', async (req) => ({
@@ -100,6 +104,19 @@ router.put('/api/settings/playback', async (req) => {
     return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
   }
 });
+router.get('/api/settings/lx-sync', async () => jsonResponse({
+  code: 0,
+  msg: 'success',
+  data: await lxSyncService.getConfig(),
+}));
+router.put('/api/settings/lx-sync', async (req) => {
+  try {
+    const body = parseJSONBody<{ enabled?: boolean; serverName?: string; password?: string; regeneratePassword?: boolean; customServerAddress?: string }>(req);
+    return jsonResponse({ code: 0, msg: 'success', data: await lxSyncService.updateConfig(body) });
+  } catch (error) {
+    return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
+  }
+});
 router.get('/api/playlists', async () => {
   const playlists = await songloft.playlists.list();
   return jsonResponse({ code: 0, msg: 'success', data: { playlists } });
@@ -135,8 +152,45 @@ function normalizeRequest(req: HTTPRequest): HTTPRequest {
   return req;
 }
 
+function formatSyncAddresses(hostUrl: string, networkAddresses: string[]): string[] {
+  const prefix = '/api/v1/jsplugin/neo-lxbridge';
+  try {
+    const host = new URL(hostUrl);
+    const port = host.port ? `:${host.port}` : '';
+    const addresses: string[] = [];
+    for (const address of networkAddresses) {
+      const value = String(address || '').trim();
+      if (!value) continue;
+      try {
+        // Newer Songloft versions may return a complete reachable URL,
+        // including protocol and port. Do not add them a second time.
+        const networkUrl = new URL(value);
+        addresses.push(`${networkUrl.origin}${prefix}`);
+        continue;
+      } catch { /* plain IP or host:port */ }
+      const hasPort = /^\[[^\]]+\]:\d+$/.test(value) || /^[^:]+:\d+$/.test(value);
+      addresses.push(`${host.protocol}//${value}${hasPort ? '' : port}${prefix}`);
+    }
+    // Keep the LAN address first so the value copied on a phone is reachable;
+    // localhost remains available for a client running on the Songloft host.
+    addresses.push(`${host.origin}${prefix}`);
+    return Array.from(new Set(addresses));
+  } catch {
+    return hostUrl ? [`${hostUrl.replace(/\/$/, '')}${prefix}`] : [];
+  }
+}
+
 async function onInit(): Promise<void> {
   songloft.log.info('[neo-lxbridge] initializing');
+  try {
+    const [hostUrl, networkAddresses] = await Promise.all([
+      songloft.plugin.getHostUrl(),
+      songloft.plugin.getNetworkAddresses(),
+    ]);
+    lxSyncService.setServerAddresses(formatSyncAddresses(hostUrl, networkAddresses));
+  } catch (error) {
+    songloft.log.warn(`[neo-lxbridge] LX sync address discovery failed: ${String(error)}`);
+  }
   await sourceManager.init();
   initialized = true;
   songloft.log.info(`[neo-lxbridge] initialized, ${runtimeManager.getStatus().length} source runtime(s) active`);
@@ -144,13 +198,16 @@ async function onInit(): Promise<void> {
 
 async function onDeinit(): Promise<void> {
   initialized = false;
+  lxSyncService.dropAllConnections();
   await runtimeManager.destroyAll();
   songloft.log.info('[neo-lxbridge] deinitialized');
 }
 
 async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
   try {
-    const response = await router.handle(normalizeRequest(req));
+    const normalized = normalizeRequest(req);
+    const protocolResponse = await handleLxProtocolHttp(normalized, lxSyncService);
+    const response = protocolResponse || await router.handle(normalized);
     if (!response || typeof response !== 'object') {
       return jsonResponse({ code: 500, msg: 'handler returned an invalid response', data: null }, 500);
     }
@@ -166,6 +223,22 @@ async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
   }
 }
 
+async function onWebSocket(req: WebSocketRequest, socket: InboundWebSocket): Promise<void> {
+  const normalizedPath = normalizeRequest({
+    method: req.method,
+    path: req.path,
+    headers: req.headers,
+    query: req.query,
+    body: null,
+  }).path;
+  await handleLxSyncWebSocket(
+    { ...req, path: normalizedPath },
+    socket,
+    lxSyncService,
+  );
+}
+
 (globalThis as unknown as { onInit: typeof onInit }).onInit = onInit;
 (globalThis as unknown as { onDeinit: typeof onDeinit }).onDeinit = onDeinit;
 (globalThis as unknown as { onHTTPRequest: typeof onHTTPRequest }).onHTTPRequest = onHTTPRequest;
+(globalThis as unknown as { onWebSocket: typeof onWebSocket }).onWebSocket = onWebSocket;

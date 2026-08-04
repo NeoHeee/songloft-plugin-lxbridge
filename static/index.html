@@ -116,6 +116,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M7 10l5-5 5 5"/><path d="M5 19h14"/></svg>
           <span>安全洗版</span>
         </button>
+        <button class="tab" type="button" data-tab="lx-sync">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4v1"/><path d="m18 9 3 3 3-3"/><path d="M17 17H7a4 4 0 0 1-4-4v-1"/><path d="m6 15-3-3-3 3"/></svg>
+          <span>洛雪互联</span>
+        </button>
         <button class="tab" type="button" data-tab="sources">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/></svg>
           <span>音源管理</span>
@@ -375,7 +379,7 @@
           </div>
           <div class="upgrade-settings-grid">
             <div class="field">
-              <label for="upgradeMaxBitrate">扫描低于此码率</label>
+              <label for="upgradeMaxBitrate">低于此码率则洗版</label>
               <select id="upgradeMaxBitrate">
                 <option value="192">192 kbps</option>
                 <option value="256">256 kbps</option>
@@ -384,7 +388,7 @@
               </select>
             </div>
             <div class="field">
-              <label for="upgradeQuality">目标音质</label>
+              <label for="upgradeQuality">新版最低音质</label>
               <select id="upgradeQuality">
                 <option value="128k">标准 · 128K</option>
                 <option value="320k">高品质 · 320K</option>
@@ -420,6 +424,16 @@
               <p>满分 190 分。原歌曲有歌手信息时至少需要 130 分，没有歌手信息时至少需要 90 分；超过上方“最大时长误差”的候选会直接排除。同分时优先选择时长差更小的歌曲。格式、容量、码率和目标音质不参与匹配分。</p>
             </div>
           </details>
+          <div class="upgrade-batch-toolbar">
+            <div class="field upgrade-search-field">
+              <label for="upgradeSearch">搜索扫描结果</label>
+              <input id="upgradeSearch" type="search" placeholder="搜索歌名、歌手或文件路径">
+            </div>
+            <button id="toggleUpgradeSelection" class="secondary" type="button">全选当前结果</button>
+            <button id="batchMatchUpgradeSongs" class="secondary" type="button">批量匹配最佳版本</button>
+            <button id="batchDownloadUpgradeSongs" class="primary" type="button">下载已匹配最佳版本</button>
+          </div>
+          <p class="muted upgrade-batch-help">批量匹配会逐首搜索，并自动选择匹配分最高、歌名歌手与时长均通过安全校验的第一候选；批量下载继续使用串行队列和下载安全间隔。</p>
           <p id="upgradeScanState" class="muted"></p>
           <div id="upgradeScanSummary" class="upgrade-scan-summary hidden"></div>
           <div id="upgradeFormatSummary" class="upgrade-format-summary hidden"></div>
@@ -433,6 +447,70 @@
           <div id="upgradeSongList" class="upgrade-song-list">
             <div class="empty-state compact-empty"><strong>尚未扫描</strong><p>点击“扫描低音质歌曲”后，这里会显示符合条件的本地歌曲。</p></div>
           </div>
+        </div>
+      </section>
+
+      <section id="tab-lx-sync" class="panel">
+        <div class="card lx-sync-card">
+          <div class="section-heading settings-heading row between">
+            <div>
+              <span class="section-kicker">洛雪互联</span>
+              <h2>LX Music 同步服务</h2>
+              <p class="muted">让桌面版与手机版 LX Music 通过 LxBridge 同步收藏和歌单。仅同步歌单数据，不上传或传输音乐文件。</p>
+            </div>
+            <label class="switch-label">
+              <input id="lxSyncEnabled" type="checkbox">
+              <span>启用服务</span>
+            </label>
+          </div>
+          <div class="lx-sync-grid">
+            <div class="field">
+              <label for="lxSyncServerName">服务名称</label>
+              <input id="lxSyncServerName" type="text" maxlength="48" value="Songloft LxBridge">
+            </div>
+            <div class="field">
+              <label for="lxSyncPassword">同步密码</label>
+              <div class="endpoint-copy-row">
+                <input id="lxSyncPassword" class="endpoint-input" readonly>
+                <button id="copyLxSyncPassword" class="secondary" type="button">复制</button>
+              </div>
+            </div>
+            <div class="field lx-sync-address-field">
+              <label for="lxSyncCustomAddress">自定义对外地址（可选）</label>
+              <div class="endpoint-copy-row">
+                <input id="lxSyncCustomAddress" class="endpoint-input" type="text" placeholder="例如 http://10.0.3.14:8080 或 https://music.example.com">
+                <button id="resetLxSyncAddress" class="secondary" type="button">恢复自动探测</button>
+              </div>
+              <small class="field-help">适用于 Docker 外部端口与容器端口不同，或通过域名、HTTPS、反向代理访问的情况。可只填写主机和端口，保存时会自动补齐插件路径。</small>
+            </div>
+            <div class="field lx-sync-address-field">
+              <label for="lxSyncAddress">最终服务地址</label>
+              <div class="endpoint-copy-row">
+                <select id="lxSyncAddress" class="endpoint-input"></select>
+                <button id="copyLxSyncAddress" class="secondary" type="button">复制</button>
+              </div>
+              <small class="field-help">“当前访问（推荐）”取自浏览器地址栏，可识别 Docker/NAS 的外部映射端口；“容器探测”可能显示容器内部端口。自定义地址保存后优先级最高。</small>
+            </div>
+          </div>
+          <div class="lx-sync-status">
+            <span><strong id="lxSyncConnectedCount">0</strong> 台在线</span>
+            <span><strong id="lxSyncDeviceCount">0</strong> 台已授权</span>
+            <span><strong id="lxSyncMappedCount">0</strong> 个映射歌单</span>
+            <span id="lxSyncLastSync">尚未同步</span>
+          </div>
+          <div class="lx-sync-guide">
+            <strong>歌单映射规则</strong>
+            <ul>
+              <li>LX Music 的“我的收藏”、默认列表和自建歌单会映射为 Songloft 中以 <code>LX ·</code> 开头的独立歌单。</li>
+              <li>同步过来的歌曲会保留洛雪音源元数据，之后仍可由 LxBridge 解析播放；纯本地文件不会被上传到 LX Music。</li>
+              <li>请不要删除映射歌单描述中的管理标记；旧文件、普通歌单和现有歌曲不会被删除。</li>
+            </ul>
+          </div>
+          <div class="lx-sync-actions">
+            <button id="saveLxSyncSettings" class="primary settings-save" type="button">保存同步设置</button>
+            <button id="regenerateLxSyncPassword" class="secondary" type="button">重置密码并撤销设备</button>
+          </div>
+          <p id="lxSyncState" class="muted settings-state" aria-live="polite"></p>
         </div>
       </section>
 
@@ -543,10 +621,10 @@
                 <label for="downloadTargetDir">音乐目录下的路径</label>
                 <input id="downloadTargetDir" type="text" list="downloadDirectorySuggestions" placeholder="例如 /LxBridge" autocomplete="off">
                 <datalist id="downloadDirectorySuggestions"></datalist>
-                <small class="field-help">Docker 默认前缀为 <code>/app/music</code>；填写 <code>/LxBridge</code> 时，最终路径为 <code>/app/music/LxBridge</code>。也可以填写完整路径。</small>
               </div>
               <button id="refreshDownloadDirectories" class="secondary settings-save" type="button">刷新已有目录</button>
             </div>
+            <small class="field-help download-directory-help">Docker 默认前缀为 <code>/app/music</code>；填写 <code>/LxBridge</code> 时，最终路径为 <code>/app/music/LxBridge</code>。也可以填写完整路径。</small>
             <p id="downloadDirectoryState" class="download-directory-state muted"></p>
             <div class="download-path-options">
               <label class="check-card">
