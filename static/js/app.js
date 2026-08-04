@@ -923,6 +923,13 @@
     return { queued: '排队中', downloading: '下载中', completed: '已完成', failed: '失败' }[status] || status;
   }
 
+  function downloadStatusText(job) {
+    if (job.status === 'queued' && Number(job.wait_until) > Date.now()) {
+      return `安全间隔 · ${Math.max(1, Math.ceil((Number(job.wait_until) - Date.now()) / 1000))} 秒`;
+    }
+    return downloadStatusLabel(job.status);
+  }
+
   function renderDownloads() {
     const list = $('downloadList');
     if (!list) return;
@@ -959,7 +966,7 @@
         <div class="download-main">
           <div class="download-title-row">
             <strong>${escapeHtml(job.title || '未知歌曲')}</strong>
-            <span class="download-status ${statusClass}">${escapeHtml(downloadStatusLabel(job.status))}</span>
+            <span class="download-status ${statusClass}">${escapeHtml(downloadStatusText(job))}</span>
           </div>
           <p>${details}</p>
           ${job.error ? `<p class="download-error">${escapeHtml(job.error)}</p>` : ''}
@@ -1429,6 +1436,11 @@ curl -X POST "${endpoint}" \
       const resp = await request('/api/settings/download');
       const targetDir = String(resp.data?.target_dir || '');
       $('downloadTargetDir').value = targetDir;
+      $('downloadProtectionEnabled').checked = resp.data?.enabled !== false;
+      $('downloadIntervalSeconds').value = String(Math.round(Number(resp.data?.download_interval_ms || 5000) / 1000));
+      $('playbackIntervalSeconds').value = String(Math.round(Number(resp.data?.playback_interval_ms || 2000) / 1000));
+      updateProtectionControls();
+      showProtectionState(resp.data);
       $('downloadDirectoryState').textContent = targetDir
         ? `当前新任务将下载到：${targetDir}`
         : '当前使用 Songloft 默认 downloads 目录';
@@ -1437,6 +1449,51 @@ curl -X POST "${endpoint}" \
     }
   }
 
+  function updateProtectionControls() {
+    const enabled = $('downloadProtectionEnabled').checked;
+    $('downloadIntervalSeconds').disabled = !enabled;
+    $('playbackIntervalSeconds').disabled = !enabled;
+    $('protectionIntervals').classList.toggle('is-disabled', !enabled);
+  }
+
+  function protectionPayload() {
+    return {
+      enabled: $('downloadProtectionEnabled').checked,
+      download_interval_ms: Number($('downloadIntervalSeconds').value) * 1000,
+      playback_interval_ms: Number($('playbackIntervalSeconds').value) * 1000,
+    };
+  }
+
+  function showProtectionState(data, saved = false) {
+    const enabled = data?.enabled !== false;
+    $('protectionSettingsState').textContent = enabled
+      ? `${saved ? '已保存' : '当前已开启'}：下载间隔 ${Number(data.download_interval_ms || 5000) / 1000} 秒，播放解析间隔 ${Number(data.playback_interval_ms || 2000) / 1000} 秒`
+      : `${saved ? '已保存' : '当前'}：批量下载保护已关闭，下载仍保持串行但不再等待`;
+  }
+
+  $('downloadProtectionEnabled').addEventListener('change', updateProtectionControls);
+
+  $('saveProtectionSettings').addEventListener('click', async () => {
+    const button = $('saveProtectionSettings');
+    setBusy(button, true, '保存中');
+    try {
+      const resp = await request('/api/settings/download', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_dir: $('downloadTargetDir').value.trim(), ...protectionPayload() }),
+      });
+      $('downloadIntervalSeconds').value = String(Number(resp.data?.download_interval_ms || 5000) / 1000);
+      $('playbackIntervalSeconds').value = String(Number(resp.data?.playback_interval_ms || 2000) / 1000);
+      showProtectionState(resp.data, true);
+      toast(resp.data?.enabled === false ? '批量下载保护已关闭，请注意音源请求风险' : '批量下载保护设置已保存');
+    } catch (error) {
+      $('protectionSettingsState').textContent = `保存失败：${error.message}`;
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+
   $('saveDownloadSettings').addEventListener('click', async () => {
     const button = $('saveDownloadSettings');
     setBusy(button, true, '保存中');
@@ -1444,7 +1501,7 @@ curl -X POST "${endpoint}" \
       const resp = await request('/api/settings/download', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_dir: $('downloadTargetDir').value.trim() }),
+        body: JSON.stringify({ target_dir: $('downloadTargetDir').value.trim(), ...protectionPayload() }),
       });
       const targetDir = String(resp.data?.target_dir || '');
       $('downloadTargetDir').value = targetDir;

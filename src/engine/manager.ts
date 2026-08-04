@@ -1,5 +1,6 @@
 import type { MusicInfo, PlatformId, ResolvedUrl, SourceMeta, SourceRuntimeInfo } from '../types';
 import { SourceRuntime } from './runtime';
+import { getRequestProtectionSettings } from '../download/settings';
 
 const QUALITY_ORDER = ['master', 'atmos_plus', 'atmos', 'hires', 'flac24bit', 'flac', '320k', '128k'] as const;
 const QUALITY_ALIASES: Record<string, string> = {
@@ -26,6 +27,24 @@ function fallbackQualities(requested: string, allowDowngrade: boolean): string[]
 export class RuntimeManager {
   private runtimes = new Map<string, SourceRuntime>();
   private platformIndex = new Map<PlatformId, SourceRuntime[]>();
+  private resolveGate: Promise<void> = Promise.resolve();
+  private lastResolveStartedAt = 0;
+
+  private async waitForResolveInterval(): Promise<void> {
+    const previous = this.resolveGate;
+    let release = () => {};
+    this.resolveGate = new Promise<void>(resolve => { release = resolve; });
+    await previous;
+    try {
+      const settings = await getRequestProtectionSettings();
+      if (!settings.enabled) return;
+      const waitMs = Math.max(0, this.lastResolveStartedAt + settings.playback_interval_ms - Date.now());
+      if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+      this.lastResolveStartedAt = Date.now();
+    } finally {
+      release();
+    }
+  }
 
   private rebuildIndex(): void {
     this.platformIndex.clear();
@@ -132,6 +151,7 @@ export class RuntimeManager {
   }
 
   async getMusicUrl(platform: PlatformId, songInfo: MusicInfo, quality = '320k', allowDowngrade = true): Promise<ResolvedUrl> {
+    await this.waitForResolveInterval();
     if (!this.hasPlatform(platform)) throw new Error(`没有已启用且支持 ${platform} 的洛雪音源`);
     const requestedQuality = normalizeQuality(quality);
     const attempts = fallbackQualities(requestedQuality, allowDowngrade);

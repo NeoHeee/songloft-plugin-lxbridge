@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.6.1</span>
+              <span class="version-badge">v0.7.0</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -422,6 +422,40 @@
               <button id="saveDownloadSettings" class="primary settings-save" type="button">保存目录</button>
             </div>
             <p id="downloadDirectoryState" class="download-directory-state muted"></p>
+            <div class="protection-settings">
+              <label class="check-card protection-toggle">
+                <input id="downloadProtectionEnabled" type="checkbox" checked>
+                <span class="check-mark"></span>
+                <span>
+                  <strong>批量下载保护（推荐开启）</strong>
+                  <small>下载保持单任务串行，并在每首歌曲成功或失败后等待一段时间；同时限制连续播放地址解析，降低音源限流或封禁 IP 的风险。</small>
+                </span>
+              </label>
+              <div id="protectionIntervals" class="protection-intervals">
+                <div class="field">
+                  <label for="downloadIntervalSeconds">下载间隔（秒）</label>
+                  <input id="downloadIntervalSeconds" type="number" min="2" max="60" step="1" value="5" inputmode="numeric">
+                  <small class="field-help">范围 2～60 秒，默认 5 秒；成功和失败的任务都会等待。</small>
+                </div>
+                <div class="field">
+                  <label for="playbackIntervalSeconds">播放解析间隔（秒）</label>
+                  <input id="playbackIntervalSeconds" type="number" min="1" max="30" step="1" value="2" inputmode="numeric">
+                  <small class="field-help">范围 1～30 秒，默认 2 秒；只限制新地址解析，不影响当前歌曲播放和暂停。</small>
+                </div>
+              </div>
+              <div class="protection-guide">
+                <strong>功能说明</strong>
+                <ul>
+                  <li>下载任务始终按队列逐个执行，不会并发请求多个音源。</li>
+                  <li>间隔从上一首下载完成或失败后开始计算，等待期间下一首显示为“安全间隔”。</li>
+                  <li>播放保护会错开连续的音源地址解析，避免播放失败时快速切换多首歌曲。</li>
+                  <li>关闭保护会取消两个间隔，但下载仍保持串行；频繁请求可能触发音源平台限流或封禁 IP。</li>
+                  <li>保存后影响后续请求，不会中断当前正在下载或播放的任务。</li>
+                </ul>
+              </div>
+              <button id="saveProtectionSettings" class="primary settings-save" type="button">保存保护设置</button>
+              <p id="protectionSettingsState" class="download-directory-state muted"></p>
+            </div>
             <details class="download-directory-guide" open>
               <summary>下载目录使用说明</summary>
               <div class="download-directory-guide-body">

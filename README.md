@@ -4,9 +4,20 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v0.7.0
+
+当前稳定版本：`v0.7.0`（2026-08-04 发布）。
+
+- 新增默认开启的“批量下载保护”，下载任务继续严格串行执行；
+- 每首下载成功或失败后默认等待 5 秒，可在设置页调整为 2～60 秒；
+- 新增播放地址解析保护，默认间隔 2 秒，可调整为 1～30 秒；
+- 下载等待期间显示“安全间隔”和剩余秒数；
+- 设置页增加保护开关、间隔参数、功能说明和关闭风险提示；
+- 关闭保护只会取消等待间隔，下载任务仍不会并发执行。
+
 ## v0.6.1
 
-当前稳定版本：`v0.6.1`（2026-08-03 发布）。
+发布版本：`v0.6.1`（2026-08-03 发布）。
 
 - 修复部分 Songloft QuickJS 环境中音频响应头不提供 `.get()`，导致文件大小显示“未知”且探测说明为 `not a function` 的问题；
 - 文件大小探测同时兼容标准 `Headers` 和普通响应头对象；
@@ -135,16 +146,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v0.6.1.jsplugin.zip`：安装包
-- `neo-lxbridge-v0.6.1.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v0.6.1-source.zip`：源码归档
+- `neo-lxbridge-v0.7.0.jsplugin.zip`：安装包
+- `neo-lxbridge-v0.7.0.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v0.7.0-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v0.6.1.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v0.7.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.6.1.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.7.0.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -229,7 +240,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.6.1.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.7.0.jsplugin.zip`。
 
 ## 安全与免责声明
 

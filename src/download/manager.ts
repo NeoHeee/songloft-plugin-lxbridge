@@ -1,4 +1,4 @@
-import { downloadDirectoryError } from './settings';
+import { downloadDirectoryError, getRequestProtectionSettings } from './settings';
 
 export type DownloadJobStatus = 'queued' | 'downloading' | 'completed' | 'failed';
 
@@ -15,6 +15,7 @@ export interface DownloadJob {
   actual_quality?: string;
   content_type?: string;
   target_dir?: string;
+  wait_until?: number;
   created_at: number;
   updated_at: number;
 }
@@ -29,6 +30,7 @@ export class DownloadManager {
   private queue: string[] = [];
   private draining = false;
   private counter = 0;
+  private lastAttemptFinishedAt = 0;
 
   enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir'>> = {}): DownloadJob {
     if (!song.id) throw new Error('歌曲 ID 无效');
@@ -133,6 +135,17 @@ export class DownloadManager {
       const job = this.jobs.get(id);
       if (!job) continue;
 
+      const protection = await getRequestProtectionSettings();
+      const waitMs = protection.enabled && this.lastAttemptFinishedAt
+        ? Math.max(0, this.lastAttemptFinishedAt + protection.download_interval_ms - Date.now())
+        : 0;
+      if (waitMs > 0) {
+        job.wait_until = Date.now() + waitMs;
+        job.updated_at = Date.now();
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+      job.wait_until = undefined;
+
       job.status = 'downloading';
       job.updated_at = Date.now();
       try {
@@ -164,6 +177,7 @@ export class DownloadManager {
         songloft.log.error(`[neo-lxbridge] 下载歌曲失败 (${job.title}): ${job.error}`);
       } finally {
         job.updated_at = Date.now();
+        this.lastAttemptFinishedAt = job.updated_at;
         this.activeBySong.delete(job.song_id);
       }
     }

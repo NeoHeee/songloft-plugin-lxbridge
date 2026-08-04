@@ -1,4 +1,57 @@
 export const DOWNLOAD_TARGET_DIR_KEY = 'download_target_dir';
+export const DOWNLOAD_PROTECTION_ENABLED_KEY = 'download_protection_enabled';
+export const DOWNLOAD_INTERVAL_MS_KEY = 'download_interval_ms';
+export const PLAYBACK_INTERVAL_MS_KEY = 'playback_interval_ms';
+
+export const DEFAULT_DOWNLOAD_INTERVAL_MS = 5000;
+export const DEFAULT_PLAYBACK_INTERVAL_MS = 2000;
+
+export interface RequestProtectionSettings {
+  enabled: boolean;
+  download_interval_ms: number;
+  playback_interval_ms: number;
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  return String(value).toLowerCase() !== 'false';
+}
+
+function normalizeInterval(value: unknown, fallback: number, min: number, max: number): number {
+  if (value == null || value === '') return fallback;
+  const interval = Number(value);
+  if (!Number.isFinite(interval)) throw new Error('保护间隔必须是有效数字');
+  return Math.round(Math.min(max, Math.max(min, interval)));
+}
+
+export async function getRequestProtectionSettings(): Promise<RequestProtectionSettings> {
+  const [enabled, downloadInterval, playbackInterval] = await Promise.all([
+    songloft.persistentStorage.get(DOWNLOAD_PROTECTION_ENABLED_KEY),
+    songloft.persistentStorage.get(DOWNLOAD_INTERVAL_MS_KEY),
+    songloft.persistentStorage.get(PLAYBACK_INTERVAL_MS_KEY),
+  ]);
+  return {
+    enabled: normalizeBoolean(enabled, true),
+    download_interval_ms: normalizeInterval(downloadInterval, DEFAULT_DOWNLOAD_INTERVAL_MS, 2000, 60000),
+    playback_interval_ms: normalizeInterval(playbackInterval, DEFAULT_PLAYBACK_INTERVAL_MS, 1000, 30000),
+  };
+}
+
+export async function setRequestProtectionSettings(value: Partial<RequestProtectionSettings>): Promise<RequestProtectionSettings> {
+  const current = await getRequestProtectionSettings();
+  const settings = {
+    enabled: normalizeBoolean(value.enabled, current.enabled),
+    download_interval_ms: normalizeInterval(value.download_interval_ms, current.download_interval_ms, 2000, 60000),
+    playback_interval_ms: normalizeInterval(value.playback_interval_ms, current.playback_interval_ms, 1000, 30000),
+  };
+  await Promise.all([
+    songloft.persistentStorage.set(DOWNLOAD_PROTECTION_ENABLED_KEY, settings.enabled),
+    songloft.persistentStorage.set(DOWNLOAD_INTERVAL_MS_KEY, settings.download_interval_ms),
+    songloft.persistentStorage.set(PLAYBACK_INTERVAL_MS_KEY, settings.playback_interval_ms),
+  ]);
+  return settings;
+}
 
 export function normalizeDownloadTargetDir(value: unknown): string {
   const targetDir = String(value || '').trim();
