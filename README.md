@@ -19,7 +19,6 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 使用时，在“洛雪互联”页面开启“LX Music 同步服务”，保存后复制服务地址和密码，再到 LX Music 的“设置 → 数据同步 → 同步服务”中填写。手机连接时应优先使用插件列出的局域网地址；经反向代理访问时需允许 WebSocket 升级。
 
-协议层基于 Apache-2.0 许可的 [snakeJohn/starlight](https://github.com/snakeJohn/starlight) 适配，详细归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## v0.9.2
 
