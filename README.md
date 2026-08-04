@@ -4,9 +4,18 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v0.9.1
+
+发布版本：`v0.9.1`。
+
+- 默认音质和自动降级设置改用 Songloft 插件持久化存储，刷新页面或更换设备后仍然保留；
+- 自动迁移旧版浏览器本地设置，当前音源不支持已保存音质时保留原值并明确提示；
+- 完成手机端布局优化，修复安全洗版列表、ffprobe 状态和长文本横向溢出；
+- 更新顶部副标题和主视觉说明，使插件定位更加简洁明确。
+
 ## v0.9.0
 
-下一版本：`v0.9.0`。
+发布版本：`v0.9.0`。
 
 - 新增“安全洗版”页面，扫描 Songloft 本地低码率歌曲；
 - 支持按 192、256、320 或 500 kbps 阈值筛选；
@@ -178,16 +187,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v0.9.0.jsplugin.zip`：安装包
-- `neo-lxbridge-v0.9.0.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v0.9.0-source.zip`：源码归档
+- `neo-lxbridge-v0.9.1.jsplugin.zip`：安装包
+- `neo-lxbridge-v0.9.1.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v0.9.1-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v0.9.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v0.9.1.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.9.0.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.9.1.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -272,7 +281,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.9.0.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.9.1.jsplugin.zip`。
 
 ## 安全与免责声明
 

@@ -25,6 +25,9 @@
       target_dir_input: '', target_dir: '', create_artist_folder: false,
       filename_order: 'title_artist', ask_each_time: false, favorite_dirs: [],
     },
+    playbackSettings: {
+      default_quality: '320k', allow_auto_downgrade: true, configured: false,
+    },
     discoveredDownloadDirs: [],
     downloadModalResolve: null,
     upgradeSongs: [],
@@ -61,11 +64,11 @@
   const musicPlaceholder = '<span class="cover-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6.8l9-1.8v10.2"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="15.2" r="2.5"/></svg></span>';
 
   function defaultQuality() {
-    return localStorage.getItem('neo-lxbridge:defaultQuality') || localStorage.getItem('lxbridge:defaultQuality') || localStorage.getItem('lxmusic:defaultQuality') || '320k';
+    return normalizeQuality(state.playbackSettings.default_quality) || '320k';
   }
 
   function allowAutoDowngrade() {
-    return (localStorage.getItem('neo-lxbridge:allowAutoDowngrade') || localStorage.getItem('lxbridge:allowAutoDowngrade')) !== 'false';
+    return state.playbackSettings.allow_auto_downgrade !== false;
   }
 
   function setTheme(mode) {
@@ -225,28 +228,50 @@
   function renderQualityOptions(preferred) {
     const available = availableQualities();
     const known = new Set(qualityCatalog.map(item => item.value));
-    const custom = Array.from(available).filter(value => value && !known.has(value)).sort();
+    const saved = normalizeQuality(preferred || defaultQuality()) || '320k';
+    const custom = Array.from(new Set([...available, saved])).filter(value => value && !known.has(value)).sort();
     const options = [
       ...qualityCatalog.map(item => ({ ...item, supported: available.has(item.value) })),
-      ...custom.map(value => ({ value, label: `扩展音质 · ${value}`, supported: true })),
+      ...custom.map(value => ({ value, label: `扩展音质 · ${value}`, supported: available.has(value) })),
     ];
-    for (const id of ['quality', 'defaultQualitySetting']) {
-      const select = $(id);
-      const current = normalizeQuality(preferred || select.value || defaultQuality());
+    const render = (select, current) => {
       select.innerHTML = options.map(item =>
         `<option value="${escapeHtml(item.value)}"${item.supported ? '' : ' disabled'}>${escapeHtml(item.label)}${item.supported ? '' : ' · 当前音源不支持'}</option>`
       ).join('');
       const usable = options.filter(item => item.supported).map(item => item.value);
-      select.value = usable.includes(current) ? current : usable.includes('320k') ? '320k' : usable[0] || '320k';
-    }
+      select.value = current;
+      return { usable, actual: select.value };
+    };
+    const setting = $('defaultQualitySetting');
+    render(setting, saved);
+    setting.value = saved;
+    const search = $('quality');
+    const searchResult = render(search, saved);
+    search.value = searchResult.usable.includes(saved)
+      ? saved
+      : searchResult.usable.includes('320k') ? '320k' : searchResult.usable[0] || '';
+    updatePlaybackSettingsState(saved, available.has(saved), search.value);
     updateExternalExample($('quality').value);
+  }
+
+  function updatePlaybackSettingsState(saved, supported, actual) {
+    const element = $('playbackSettingsState');
+    if (!element) return;
+    const item = qualityCatalog.find(option => option.value === saved);
+    const label = item?.label || saved;
+    if (supported) {
+      element.textContent = `已保存：${label}`;
+      element.classList.remove('is-warning');
+      return;
+    }
+    const fallback = qualityCatalog.find(option => option.value === actual)?.label || actual || '无可用音质';
+    element.textContent = `已保存：${label}。当前音源不支持，搜索时暂用 ${fallback}；设置值不会被修改。`;
+    element.classList.add('is-warning');
   }
 
   function syncQualityControls(value) {
     renderQualityOptions(normalizeQuality(value) || '320k');
-    const normalized = $('quality').value || '320k';
-    $('defaultQualitySetting').value = normalized;
-    updateExternalExample(normalized);
+    updateExternalExample($('quality').value || '320k');
   }
 
   function updateQualityCapabilities(runtimeSources) {
@@ -262,7 +287,7 @@
         });
       });
     });
-    renderQualityOptions($('quality')?.value || defaultQuality());
+    renderQualityOptions(defaultQuality());
   }
 
   function activateTab(name) {
@@ -1974,12 +1999,61 @@ curl -X POST "${endpoint}" \
     }
   });
 
-  $('saveSettings').addEventListener('click', () => {
-    const value = $('defaultQualitySetting').value || '320k';
-    localStorage.setItem('neo-lxbridge:defaultQuality', value);
-    localStorage.setItem('neo-lxbridge:allowAutoDowngrade', String($('allowAutoDowngrade').checked));
-    syncQualityControls(value);
-    toast('默认音质已保存');
+  async function savePlaybackSettings(value, allowDowngrade) {
+    const resp = await request('/api/settings/playback', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ default_quality: value, allow_auto_downgrade: allowDowngrade }),
+    });
+    state.playbackSettings = resp.data;
+    $('allowAutoDowngrade').checked = allowAutoDowngrade();
+    syncQualityControls(defaultQuality());
+    return resp.data;
+  }
+
+  function legacyPlaybackSettings() {
+    const qualityKeys = ['neo-lxbridge:defaultQuality', 'lxbridge:defaultQuality', 'lxmusic:defaultQuality'];
+    const downgradeKeys = ['neo-lxbridge:allowAutoDowngrade', 'lxbridge:allowAutoDowngrade'];
+    const quality = qualityKeys.map(key => localStorage.getItem(key)).find(Boolean) || '320k';
+    const storedDowngrade = downgradeKeys.map(key => localStorage.getItem(key)).find(value => value != null);
+    return { quality, allowDowngrade: storedDowngrade !== 'false' };
+  }
+
+  async function loadPlaybackSettings() {
+    try {
+      const resp = await request('/api/settings/playback');
+      let settings = resp.data;
+      if (!settings?.configured) {
+        const legacy = legacyPlaybackSettings();
+        settings = await savePlaybackSettings(legacy.quality, legacy.allowDowngrade);
+        localStorage.removeItem('neo-lxbridge:defaultQuality');
+        localStorage.removeItem('neo-lxbridge:allowAutoDowngrade');
+      } else {
+        state.playbackSettings = settings;
+        $('allowAutoDowngrade').checked = allowAutoDowngrade();
+        syncQualityControls(defaultQuality());
+      }
+    } catch (error) {
+      $('playbackSettingsState').textContent = `读取设置失败：${error.message}`;
+      $('playbackSettingsState').classList.add('is-warning');
+      toast(error.message, 5200);
+    }
+  }
+
+  $('saveSettings').addEventListener('click', async () => {
+    const button = $('saveSettings');
+    const value = $('defaultQualitySetting').value || defaultQuality();
+    setBusy(button, true, '保存中');
+    try {
+      await savePlaybackSettings(value, $('allowAutoDowngrade').checked);
+      toast('默认音质已保存');
+    } catch (error) {
+      $('playbackSettingsState').textContent = `保存失败：${error.message}`;
+      $('playbackSettingsState').classList.add('is-warning');
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
   });
   $('quality').addEventListener('change', () => updateExternalExample($('quality').value));
   $('defaultQualitySetting').addEventListener('change', () => updateExternalExample($('defaultQualitySetting').value));
@@ -2009,6 +2083,7 @@ curl -X POST "${endpoint}" \
   toggleNewPlaylistField('singlePlaylistTarget', 'singleNewPlaylistField');
   updatePlayerDock(null, '');
   loadStatus();
+  loadPlaybackSettings();
   loadDownloads();
   loadDownloadSettings();
   updateExternalExample(defaultQuality());

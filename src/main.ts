@@ -14,6 +14,7 @@ import { musicSdk, sources } from './musicSdk/facade';
 import { discoverMusicDirectories, getDownloadPathSettings, getRequestProtectionSettings, setDownloadPathSettings, setRequestProtectionSettings } from './download/settings';
 import { parseJSONBody } from './handlers/request';
 import { upgradeHandlers } from './handlers/upgrade';
+import { getPlaybackSettings, setPlaybackSettings } from './playback/settings';
 
 const router = createRouter();
 const runtimeManager = new RuntimeManager();
@@ -82,6 +83,19 @@ router.put('/api/settings/download', async (req) => {
     });
     const protection = await setRequestProtectionSettings(body);
     return jsonResponse({ code: 0, msg: 'success', data: { ...pathSettings, ...protection } });
+  } catch (error) {
+    return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
+  }
+});
+router.get('/api/settings/playback', async () => jsonResponse({
+  code: 0,
+  msg: 'success',
+  data: await getPlaybackSettings(),
+}));
+router.put('/api/settings/playback', async (req) => {
+  try {
+    const body = parseJSONBody<{ default_quality?: string; allow_auto_downgrade?: boolean }>(req);
+    return jsonResponse({ code: 0, msg: 'success', data: await setPlaybackSettings(body) });
   } catch (error) {
     return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
   }
