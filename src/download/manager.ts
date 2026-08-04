@@ -16,6 +16,11 @@ export interface DownloadJob {
   content_type?: string;
   target_dir?: string;
   path_template?: string;
+  upgrade_source_song_id?: number;
+  upgrade_source_bitrate?: number;
+  upgrade_target_quality?: string;
+  verification_status?: 'passed' | 'warning';
+  verification_message?: string;
   wait_until?: number;
   created_at: number;
   updated_at: number;
@@ -33,7 +38,7 @@ export class DownloadManager {
   private counter = 0;
   private lastAttemptFinishedAt = 0;
 
-  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir' | 'path_template'>> = {}): DownloadJob {
+  enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir' | 'path_template' | 'upgrade_source_song_id' | 'upgrade_source_bitrate' | 'upgrade_target_quality'>> = {}): DownloadJob {
     if (!song.id) throw new Error('歌曲 ID 无效');
 
     if (song.type === 'local') {
@@ -169,6 +174,26 @@ export class DownloadManager {
           job.status = 'completed';
           job.path = result.path || '';
           job.already_downloaded = false;
+          if (job.upgrade_source_song_id) {
+            try {
+              const downloaded = await songloft.songs.getById(job.song_id);
+              const rawBitrate = Number(downloaded?.bit_rate || 0);
+              const actualBitrate = rawBitrate > 10000 ? Math.round(rawBitrate / 1000) : Math.round(rawBitrate);
+              const oldBitrate = Number(job.upgrade_source_bitrate || 0);
+              const format = String(downloaded?.format || '').toLowerCase();
+              const target = String(job.upgrade_target_quality || '');
+              const expectsFlac = ['flac', 'flac24bit', 'hires'].includes(target);
+              const bitrateImproved = actualBitrate > 0 && (!oldBitrate || actualBitrate > oldBitrate);
+              const formatMatches = !expectsFlac || format.includes('flac');
+              job.verification_status = bitrateImproved && formatMatches ? 'passed' : 'warning';
+              job.verification_message = job.verification_status === 'passed'
+                ? `洗版验证通过：${format.toUpperCase() || '未知格式'}${actualBitrate ? ` · ${actualBitrate} kbps` : ''}，旧版已保留`
+                : `洗版验证警告：实际 ${format.toUpperCase() || '未知格式'}${actualBitrate ? ` · ${actualBitrate} kbps` : ''}，未确认高于旧版 ${oldBitrate || '未知'} kbps；请试听检查，旧版已保留`;
+            } catch (verificationError) {
+              job.verification_status = 'warning';
+              job.verification_message = `新版已下载，但无法读取实际音质进行验证：${errorMessage(verificationError)}；请试听检查，旧版已保留`;
+            }
+          }
         }
         job.error = undefined;
       } catch (error) {

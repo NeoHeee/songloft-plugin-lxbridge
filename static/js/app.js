@@ -27,6 +27,11 @@
     },
     discoveredDownloadDirs: [],
     downloadModalResolve: null,
+    upgradeSongs: [],
+    upgradeUnknownSongs: [],
+    upgradeUnknownTotal: 0,
+    upgradeUnknownExpanded: false,
+    upgradeCandidates: {},
     qualityByPlatform: {},
     legacyQualityPlatforms: new Set(),
     browseMode: 'rank',
@@ -926,6 +931,277 @@
     return `${size >= 100 ? size.toFixed(0) : size >= 10 ? size.toFixed(1) : size.toFixed(2)} ${units[unit]}`;
   }
 
+  function renderUpgradeSongs() {
+    const list = $('upgradeSongList');
+    if (!list) return;
+    if (!state.upgradeSongs.length) {
+      list.innerHTML = '<div class="empty-state compact-empty"><strong>没有符合条件的歌曲</strong><p>可以提高扫描码率阈值后重新扫描。</p></div>';
+      return;
+    }
+    list.innerHTML = state.upgradeSongs.map(song => {
+      const candidates = state.upgradeCandidates[song.id];
+      const candidateMarkup = Array.isArray(candidates)
+        ? (candidates.length ? `<div class="upgrade-candidates">${candidates.map((item, index) => `<div class="upgrade-candidate">
+            <div class="upgrade-candidate-copy"><strong>${escapeHtml(item.title)} · ${escapeHtml(item.artist || '未知歌手')}</strong><span>${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)} · 时长差 ${Number(item.duration_diff || 0).toFixed(1)} 秒 · 匹配分 ${Math.round(Number(item.match_score || 0))}</span>${upgradeCandidateProbeMarkup(item)}</div>
+            <button class="mini-button download" type="button" data-upgrade-download="${song.id}" data-candidate-index="${index}">下载新版</button>
+          </div>`).join('')}</div>` : '<p class="muted">没有找到满足歌名、歌手和时长条件的安全候选。</p>')
+        : '';
+      return `<article class="upgrade-song-item">
+        <div class="upgrade-song-header">
+          <div class="upgrade-song-copy"><strong>${escapeHtml(song.title)} · ${escapeHtml(song.artist || '未知歌手')}</strong><span>${escapeHtml(String(song.format || '未知格式').toUpperCase())} · ${Number(song.bitrate_kbps || 0)} kbps${song.bitrate_source === 'estimated' ? '（估算）' : ''} · ${formatDuration(song.duration)} · ${escapeHtml(song.file_path || '')}</span></div>
+          <button class="secondary" type="button" data-upgrade-match="${song.id}">匹配高音质版本</button>
+        </div>
+        ${candidateMarkup}
+      </article>`;
+    }).join('');
+    list.querySelectorAll('[data-upgrade-match]').forEach(button => button.addEventListener('click', async () => {
+      const songId = Number(button.dataset.upgradeMatch);
+      setBusy(button, true, '匹配中');
+      try {
+        const resp = await request('/api/upgrade/match', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ song_id: songId, quality: $('upgradeQuality').value, max_duration_diff: Number($('upgradeDurationDiff').value) }),
+        });
+        state.upgradeCandidates[songId] = resp.data?.candidates || [];
+        state.upgradeCandidates[songId].forEach(item => { item._probe_status = 'loading'; });
+        renderUpgradeSongs();
+        for (const item of state.upgradeCandidates[songId]) {
+          try {
+            item._probe = await probeDownload(item, false);
+            item._probe_status = 'done';
+          } catch (error) {
+            item._probe_status = 'failed';
+            item._probe_error = error.message;
+          }
+          renderUpgradeSongs();
+        }
+      } catch (error) {
+        toast(`匹配失败：${error.message}`, 6200);
+      } finally { setBusy(button, false); }
+    }));
+    list.querySelectorAll('[data-upgrade-download]').forEach(button => button.addEventListener('click', async () => {
+      const songId = Number(button.dataset.upgradeDownload);
+      const candidate = state.upgradeCandidates[songId]?.[Number(button.dataset.candidateIndex)];
+      if (!candidate) return;
+      await startDownload(candidate, button, {
+        downloadOptions: { target_dir_input: $('upgradeTargetDir').value.trim() || '/LxBridge-Upgrades', create_artist_folder: false, filename_order: 'title_artist' },
+        allowDowngrade: false,
+        requireProbe: true,
+        upgradeMeta: { source_song_id: songId, source_bitrate: state.upgradeSongs.find(song => song.id === songId)?.bitrate_kbps || 0, target_quality: $('upgradeQuality').value },
+      });
+    }));
+  }
+
+  function upgradeCandidateProbeMarkup(item) {
+    if (item._probe_status === 'loading') return '<div class="upgrade-candidate-media muted">正在顺序探测格式、容量和码率…</div>';
+    if (item._probe_status === 'failed') return `<div class="upgrade-candidate-media warning">媒体信息未知 · ${escapeHtml(item._probe_error || '探测失败')}</div>`;
+    const probe = item._probe;
+    if (!probe) return '<div class="upgrade-candidate-media muted">媒体信息尚未探测</div>';
+    const quality = String(probe.actual_quality || probe.requested_quality || '').toLowerCase();
+    const contentType = String(probe.content_type || '').split(';')[0];
+    const subtype = contentType.includes('/') ? contentType.split('/').pop() : contentType;
+    const format = quality.includes('flac') || subtype === 'flac' ? 'FLAC'
+      : quality.includes('320') || /mpeg|mp3/.test(subtype) ? 'MP3'
+        : (subtype || quality || '未知格式').toUpperCase();
+    const bytes = Number(probe.total_bytes || 0);
+    const duration = Number(item.duration || 0);
+    let bitrate = 0;
+    let approximate = false;
+    if (bytes > 0 && duration > 0) {
+      bitrate = Math.round((bytes * 8) / duration / 1000);
+      approximate = true;
+    } else {
+      const qualityMatch = quality.match(/(\d{2,4})\s*k?/);
+      bitrate = qualityMatch ? Number(qualityMatch[1]) : 0;
+    }
+    const size = bytes > 0 ? formatBytes(bytes) : '容量未知';
+    const bitrateText = bitrate > 0 ? `${approximate ? '约 ' : ''}${bitrate} kbps` : '码率未知';
+    const downgrade = probe.downgraded ? '<em>已降级</em>' : '';
+    return `<div class="upgrade-candidate-media"><span>格式 <strong>${escapeHtml(format)}</strong></span><span>容量 <strong>${escapeHtml(size)}</strong></span><span>码率 <strong>${escapeHtml(bitrateText)}</strong></span>${downgrade}${probe.probe_error ? `<small title="${escapeHtml(probe.probe_error)}">容量探测受限</small>` : ''}</div>`;
+  }
+
+  function renderUpgradeStatistics(statistics) {
+    const summary = $('upgradeScanSummary');
+    const formats = $('upgradeFormatSummary');
+    if (!statistics) {
+      summary.classList.add('hidden');
+      formats.classList.add('hidden');
+      return;
+    }
+    const ranges = statistics.ranges || {};
+    const entries = [
+      ['歌曲库总数', statistics.library_total],
+      ['本地歌曲', statistics.local_total],
+      ['远程/其他', statistics.remote_total],
+      ['有效本地路径', statistics.local_with_path],
+      ['码率已识别', statistics.bitrate_known],
+      ['码率未知', statistics.bitrate_unknown],
+      ['重新探测获得', statistics.bitrate_from_probe],
+      ['其中估算值', statistics.bitrate_estimated],
+      ['< 192 kbps', ranges.below_192],
+      ['192～319 kbps', ranges.from_192_to_319],
+      ['320～499 kbps', ranges.from_320_to_499],
+      ['≥ 500 kbps', ranges.at_least_500],
+    ];
+    summary.innerHTML = entries.map(([label, value]) => `<div class="upgrade-stat"><span>${escapeHtml(label)}</span><strong>${Number(value || 0)}</strong></div>`).join('');
+    summary.classList.remove('hidden');
+    const formatItems = Array.isArray(statistics.formats) ? statistics.formats : [];
+    formats.innerHTML = `<span class="upgrade-format-chip"><strong>本地格式分布</strong></span>${formatItems.map(item => `<span class="upgrade-format-chip">${escapeHtml(item.format)} · ${Number(item.count || 0)}</span>`).join('')}`;
+    formats.classList.remove('hidden');
+  }
+
+  function renderUnknownSongs() {
+    const section = $('upgradeUnknownSection');
+    const list = $('upgradeUnknownList');
+    const button = $('toggleUnknownSongs');
+    const songs = state.upgradeUnknownSongs;
+    if (!songs.length) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    $('upgradeUnknownCount').textContent = state.upgradeUnknownTotal > songs.length
+      ? `显示 ${songs.length} / 共 ${state.upgradeUnknownTotal} 首`
+      : `${songs.length} 首`;
+    list.innerHTML = songs.map(song => `<div class="upgrade-unknown-item" title="${escapeHtml(song.file_path || '')}">
+      <strong>${escapeHtml(song.title || '未知歌曲')} · ${escapeHtml(song.artist || '未知歌手')}</strong>
+      <span>${escapeHtml(String(song.format || '未知格式').toUpperCase())} · ${formatDuration(song.duration)}</span>
+      <span>${formatBytes(song.file_size)}</span>
+      <span>${escapeHtml(song.file_path || '无本地路径')}</span>
+    </div>`).join('');
+    list.classList.toggle('hidden', !state.upgradeUnknownExpanded);
+    button.textContent = state.upgradeUnknownExpanded ? '收起列表' : '展开列表';
+  }
+
+  async function scanUpgradeSongs() {
+    const button = $('scanUpgradeSongs');
+    setBusy(button, true, '扫描中');
+    try {
+      const bitrate = Number($('upgradeMaxBitrate').value || 320);
+      const resp = await request(`/api/upgrade/scan?max_bitrate=${encodeURIComponent(bitrate)}&limit=500`);
+      state.upgradeSongs = resp.data?.songs || [];
+      state.upgradeUnknownSongs = resp.data?.unknown_songs || [];
+      state.upgradeUnknownTotal = Number(resp.data?.statistics?.bitrate_unknown || state.upgradeUnknownSongs.length);
+      state.upgradeCandidates = {};
+      $('upgradeScanState').textContent = `找到 ${state.upgradeSongs.length} 首严格低于 ${bitrate} kbps、具有本地路径且码率已识别的歌曲；恰好 ${bitrate} kbps 不计入。`;
+      renderUpgradeStatistics(resp.data?.statistics);
+      renderUnknownSongs();
+      renderUpgradeSongs();
+    } catch (error) {
+      $('upgradeScanState').textContent = `扫描失败：${error.message}`;
+      renderUpgradeStatistics(null);
+      toast(error.message, 6200);
+    } finally { setBusy(button, false); }
+  }
+
+  async function probeUnknownBitrates() {
+    const button = $('probeUnknownBitrates');
+    setBusy(button, true, '探测中…');
+    $('upgradeScanState').textContent = '正在低并发读取本地音频信息，请勿重复操作…';
+    try {
+      const resp = await request('/api/upgrade/probe-unknown', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          limit: Number($('probeBatchSize').value || 50),
+          concurrency: Number($('probeConcurrency').value || 2),
+        }),
+      });
+      const result = resp.data || {};
+      const failureHint = Number(result.failed || 0) > 0
+        ? `，${Number(result.failed)} 首失败并继续保持未知`
+        : '';
+      toast(`探测完成：精确 ${Number(result.exact || 0)} 首，估算 ${Number(result.estimated || 0)} 首${failureHint}`, 6200);
+      await scanUpgradeSongs();
+      const firstFailure = Array.isArray(result.failures) && result.failures[0]
+        ? ` 首个失败原因：${result.failures[0].error}`
+        : '';
+      $('upgradeScanState').textContent += ` 本批处理 ${Number(result.processed || 0)} 首：精确 ${Number(result.exact || 0)} 首，估算 ${Number(result.estimated || 0)} 首，失败 ${Number(result.failed || 0)} 首；当前仍有 ${Number(result.remaining || 0)} 首未知。${firstFailure}`;
+      await loadProbeToolStatus();
+    } catch (error) {
+      $('upgradeScanState').textContent = `重新探测失败：${error.message}`;
+      toast(error.message, 7200);
+    } finally { setBusy(button, false); }
+  }
+
+  function renderProbeToolStatus(status) {
+    const label = $('probeToolStatus');
+    const install = $('installProbeTool');
+    const remove = $('removeProbeTool');
+    if (!status?.available) {
+      label.className = 'probe-tool-alert unavailable';
+      label.innerHTML = '<span class="probe-tool-dot"></span><span><strong>ffprobe 不可用</strong><small>点击重新探测时会尝试自动安装，失败后改用估算码率。</small></span><em class="probe-status-badge">不可用</em>';
+      install.classList.remove('hidden');
+      remove.classList.add('hidden');
+      return;
+    }
+    const source = status.source === 'plugin' ? '插件私有版' : 'Songloft 容器提供';
+    const systemExtra = status.source === 'plugin' && status.system_available
+      ? `；同时检测到容器版本：${status.system_version || 'ffprobe 可用'}`
+      : '';
+    label.className = 'probe-tool-alert available';
+    label.innerHTML = `<span class="probe-tool-dot"></span><span><strong>${status.source === 'plugin' ? '插件私有 ffprobe 可用' : '容器 ffprobe 可用'}</strong><small>${escapeHtml(status.version || source)}${escapeHtml(systemExtra)}</small></span><em class="probe-status-badge">正常</em>`;
+    install.classList.add('hidden');
+    remove.classList.toggle('hidden', status.source !== 'plugin');
+  }
+
+  async function loadProbeToolStatus() {
+    const button = $('refreshProbeTool');
+    if (button) setBusy(button, true, '检测中…');
+    try {
+      const resp = await request('/api/upgrade/probe-tool');
+      renderProbeToolStatus(resp.data);
+    } catch (error) {
+      const label = $('probeToolStatus');
+      label.className = 'probe-tool-alert unavailable';
+      label.innerHTML = `<span class="probe-tool-dot"></span><span><strong>ffprobe 检测失败</strong><small>${escapeHtml(error.message)}</small></span><em class="probe-status-badge">不可用</em>`;
+    } finally { if (button) setBusy(button, false); }
+  }
+
+  async function installProbeTool() {
+    const button = $('installProbeTool');
+    setBusy(button, true, '下载中…');
+    try {
+      const resp = await request('/api/upgrade/probe-tool/install', { method: 'POST' });
+      toast('插件私有 ffprobe 已安装，不需要修改 Songloft 镜像。', 5200);
+      await loadProbeToolStatus();
+      return resp.data;
+    } catch (error) {
+      toast(`安装失败：${error.message}`, 7200);
+    } finally { setBusy(button, false); }
+  }
+
+  async function removeProbeTool() {
+    const button = $('removeProbeTool');
+    setBusy(button, true, '删除中…');
+    try {
+      await request('/api/upgrade/probe-tool', { method: 'DELETE' });
+      toast('插件私有 ffprobe 已删除。', 4200);
+      await loadProbeToolStatus();
+    } catch (error) {
+      toast(`删除失败：${error.message}`, 6200);
+    } finally { setBusy(button, false); }
+  }
+
+  $('scanUpgradeSongs').addEventListener('click', scanUpgradeSongs);
+  $('probeUnknownBitrates').addEventListener('click', probeUnknownBitrates);
+  $('refreshProbeTool').addEventListener('click', loadProbeToolStatus);
+  $('installProbeTool').addEventListener('click', installProbeTool);
+  $('removeProbeTool').addEventListener('click', removeProbeTool);
+  const savedProbeBatchSize = localStorage.getItem('neo-lxbridge:probeBatchSize') || '50';
+  const savedProbeConcurrency = localStorage.getItem('neo-lxbridge:probeConcurrency') || '2';
+  if ([...$('probeBatchSize').options].some(option => option.value === savedProbeBatchSize)) $('probeBatchSize').value = savedProbeBatchSize;
+  if ([...$('probeConcurrency').options].some(option => option.value === savedProbeConcurrency)) $('probeConcurrency').value = savedProbeConcurrency;
+  $('probeBatchSize').addEventListener('change', event => localStorage.setItem('neo-lxbridge:probeBatchSize', event.target.value));
+  $('probeConcurrency').addEventListener('change', event => localStorage.setItem('neo-lxbridge:probeConcurrency', event.target.value));
+  $('toggleUnknownSongs').addEventListener('click', () => {
+    state.upgradeUnknownExpanded = !state.upgradeUnknownExpanded;
+    renderUnknownSongs();
+  });
+  loadProbeToolStatus();
+  $('upgradeTargetDir').addEventListener('input', () => {
+    $('upgradeResolvedPath').textContent = resolvedDownloadPath($('upgradeTargetDir').value);
+  });
+
   function downloadStatusLabel(status) {
     return { queued: '排队中', downloading: '下载中', completed: '已完成', failed: '失败' }[status] || status;
   }
@@ -977,6 +1253,7 @@
           </div>
           <p>${details}</p>
           ${job.error ? `<p class="download-error">${escapeHtml(job.error)}</p>` : ''}
+          ${job.verification_message ? `<p class="${job.verification_status === 'passed' ? 'download-verification-passed' : 'download-verification-warning'}">${escapeHtml(job.verification_message)}</p>` : ''}
           ${job.path ? `<p class="download-path" title="${escapeHtml(job.path)}">${escapeHtml(job.path)}</p>` : ''}
         </div>
         <div class="download-actions">
@@ -1019,7 +1296,7 @@
     }
   }
 
-  async function probeDownload(item) {
+  async function probeDownload(item, allowDowngrade = allowAutoDowngrade()) {
     const requestedQuality = String(item.source_data?.quality || $('quality').value || '320k');
     const resp = await request('/api/direct/music/probe', {
       method: 'POST',
@@ -1028,7 +1305,7 @@
         source_id: item.source_data?.platform,
         songInfo: item.source_data?.songInfo,
         quality: requestedQuality,
-        allow_downgrade: allowAutoDowngrade(),
+        allow_downgrade: allowDowngrade,
       }),
     });
     return { requestedQuality, ...(resp.data || {}) };
@@ -1170,9 +1447,11 @@
     setBusy(button, true, '探测中');
     try {
       let probe = null;
+      const allowDowngrade = behavior.allowDowngrade ?? allowAutoDowngrade();
       try {
-        probe = await probeDownload(item);
+        probe = await probeDownload(item, allowDowngrade);
       } catch (error) {
+        if (behavior.requireProbe) throw new Error(`高音质探测失败，安全洗版已停止：${error.message}`);
         const proceed = behavior.skipConfirm || state.downloadSettings.ask_each_time
           ? true
           : window.confirm(`无法提前获取《${item.title}》的文件大小：${error.message}\n\n是否仍要继续下载？`);
@@ -1192,7 +1471,7 @@
         if (!proceed) return;
         item.source_data.requested_quality = probe.requestedQuality;
         item.source_data.quality = actualQuality;
-        item.source_data.allow_downgrade = allowAutoDowngrade();
+        item.source_data.allow_downgrade = allowDowngrade;
       }
       if (!behavior.downloadOptions && state.downloadSettings.ask_each_time) {
         downloadOptions = await openDownloadModal({ item, probe });
@@ -1211,6 +1490,7 @@
             content_type: probe.content_type || '',
           } : {},
           download_options: downloadOptions,
+          upgrade_meta: behavior.upgradeMeta || undefined,
         }),
       });
       const job = resp.data?.job;

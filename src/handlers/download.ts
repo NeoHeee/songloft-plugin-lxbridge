@@ -11,6 +11,7 @@ interface DownloadRequest {
   fetch_lyric?: boolean;
   download_meta?: { total_bytes?: number | null; actual_quality?: string; content_type?: string };
   download_options?: Partial<DownloadPathSettings>;
+  upgrade_meta?: { source_song_id?: number; source_bitrate?: number; target_quality?: string };
 }
 
 export function downloadHandlers(manager: DownloadManager): {
@@ -25,7 +26,10 @@ export function downloadHandlers(manager: DownloadManager): {
         const body = parseJSONBody<DownloadRequest>(req);
         if (!body.song || typeof body.song !== 'object') throw new Error('song 不能为空');
 
-        const created = await upsertSearchSongs([body.song], body.fetch_lyric !== false);
+        const upgradeSuffix = body.upgrade_meta?.source_song_id
+          ? `:upgrade:${Number(body.upgrade_meta.source_song_id)}:${String(body.upgrade_meta.target_quality || 'quality')}`
+          : '';
+        const created = await upsertSearchSongs([body.song], body.fetch_lyric !== false, upgradeSuffix);
         const record = created[0];
         if (!record?.id) throw new Error('写入 Songloft 歌曲库失败');
 
@@ -33,10 +37,23 @@ export function downloadHandlers(manager: DownloadManager): {
         if (!current) throw new Error('无法读取已导入的歌曲记录');
         const pathSettings = await getDownloadPathSettings();
         const selectedSettings = resolveDownloadPathSettings(body.download_options || {}, pathSettings);
+        if (body.upgrade_meta?.source_song_id) {
+          if (!selectedSettings.target_dir) throw new Error('安全洗版必须使用独立的新版保存目录');
+          const oldSong = await songloft.songs.getById(Number(body.upgrade_meta.source_song_id));
+          if (!oldSong || oldSong.type !== 'local') throw new Error('洗版源歌曲不存在或已被修改');
+          const oldPath = String(oldSong.file_path || '').replace(/\\/g, '/');
+          const oldDirectory = oldPath.slice(0, oldPath.lastIndexOf('/')).replace(/\/+$/, '');
+          if (oldDirectory && selectedSettings.target_dir === oldDirectory) {
+            throw new Error('新版保存目录不能与旧文件所在目录相同，请使用独立目录');
+          }
+        }
         const job = manager.enqueue(current, {
           ...(body.download_meta || {}),
           target_dir: selectedSettings.target_dir || undefined,
-          path_template: selectedSettings.target_dir ? selectedSettings.path_template : undefined,
+          path_template: selectedSettings.target_dir ? (body.upgrade_meta?.source_song_id ? '{title}-{artist}' : selectedSettings.path_template) : undefined,
+          upgrade_source_song_id: Number(body.upgrade_meta?.source_song_id || 0) || undefined,
+          upgrade_source_bitrate: Number(body.upgrade_meta?.source_bitrate || 0) || undefined,
+          upgrade_target_quality: String(body.upgrade_meta?.target_quality || '') || undefined,
         });
         return ok({ job });
       } catch (error) {

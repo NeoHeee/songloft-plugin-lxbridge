@@ -32,7 +32,7 @@ function stableId(song: MusicInfo): string {
   return String(song.songmid || song.musicId || song.hash || song.copyrightId || '');
 }
 
-async function mapSong(item: SearchSongItem, fetchLyric: boolean): Promise<Record<string, unknown>> {
+async function mapSong(item: SearchSongItem, fetchLyric: boolean, dedupSuffix = ''): Promise<Record<string, unknown>> {
   const sourceData = item.source_data || {};
   const platform = sourceData.platform;
   const songInfo = sourceData.songInfo as MusicInfo | undefined;
@@ -57,7 +57,7 @@ async function mapSong(item: SearchSongItem, fetchLyric: boolean): Promise<Recor
     plugin_entry_path: 'neo-lxbridge',
     source_data: JSON.stringify(sourceData),
   };
-  if (id) payload.dedup_key = `${platform}:${id}`;
+  if (id) payload.dedup_key = `${platform}:${id}${dedupSuffix}`;
   if (lyric) {
     payload.lyric = lyric;
     payload.lyric_source = 'manual';
@@ -65,14 +65,14 @@ async function mapSong(item: SearchSongItem, fetchLyric: boolean): Promise<Recor
   return payload;
 }
 
-async function mapWithConcurrency(items: SearchSongItem[], fetchLyric: boolean, concurrency = 3): Promise<Record<string, unknown>[]> {
+async function mapWithConcurrency(items: SearchSongItem[], fetchLyric: boolean, concurrency = 3, dedupSuffix = ''): Promise<Record<string, unknown>[]> {
   const result: Record<string, unknown>[] = new Array(items.length);
   let index = 0;
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
     while (true) {
       const current = index++;
       if (current >= items.length) return;
-      result[current] = await mapSong(items[current], fetchLyric);
+      result[current] = await mapSong(items[current], fetchLyric, dedupSuffix);
     }
   });
   await Promise.all(workers);
@@ -83,9 +83,9 @@ async function mapWithConcurrency(items: SearchSongItem[], fetchLyric: boolean, 
  * 把搜索结果写入 Songloft 歌曲库。宿主按 (plugin_entry_path, dedup_key)
  * 执行 upsert，因此重复导入会复用同一歌曲 ID；已下载为 local 的歌曲不会被覆盖回 remote。
  */
-export async function upsertSearchSongs(items: SearchSongItem[], fetchLyric = true): Promise<ImportedSongRecord[]> {
+export async function upsertSearchSongs(items: SearchSongItem[], fetchLyric = true, dedupSuffix = ''): Promise<ImportedSongRecord[]> {
   if (!items.length) return [];
-  const payload = await mapWithConcurrency(items, fetchLyric);
+  const payload = await mapWithConcurrency(items, fetchLyric, 3, dedupSuffix);
   const created = await callHostAPI<{ songs: ImportedSongRecord[]; count: number }>('/api/v1/songs/remote', {
     method: 'POST',
     body: JSON.stringify(payload),

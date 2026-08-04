@@ -4,9 +4,27 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v0.9.0
+
+下一版本：`v0.9.0`。
+
+- 新增“安全洗版”页面，扫描 Songloft 本地低码率歌曲；
+- 支持按 192、256、320 或 500 kbps 阈值筛选；
+- 扫描结果区分歌曲库总数、本地/远程、码率已识别/未知、四个码率区间和本地格式分布；
+- 可通过“重新探测未知码率”读取本地音频信息：优先使用容器已有的 `ffprobe`，也可下载固定版本到插件私有目录（Linux x64/ARM64，不修改 Songloft 镜像）；仍不可用时根据文件大小和时长生成明确标记的估算值；每批数量可选 50/100/200/500，并发数可选 1～4，默认 50/2；
+- 探测会自动把 Songloft 数据库中的 `music/...`、`/music/...` 等相对容器路径映射到 `/app/music/...`，并保留原始路径作为备用尝试；
+- 支持匹配 320K、FLAC、24-Bit 和 Hi-Res 候选；
+- 匹配候选会按顺序探测并显示实际格式、文件容量和平均码率，探测失败时显示明确原因；
+- 候选必须通过歌名、歌手相似度与可调时长误差校验；
+- 洗版解析禁止自动降级，目标音质不可用时直接停止；
+- 新版默认下载到独立的 `/app/music/LxBridge-Upgrades` 目录；
+- 新版使用独立歌曲记录，不复用或覆盖旧版；
+- 下载完成后校验实际格式与码率，并显示通过或警告；
+- 安全版不会删除、覆盖或移动旧歌曲，也不会修改原歌单关系。
+
 ## v0.8.0
 
-下一版本：`v0.8.0`。
+发布版本：`v0.8.0`（2026-08-04 发布）。
 
 - 自定义目录默认平铺保存，不再按“歌手-专辑”自动创建目录，减少 Songloft 首页产生单曲文件歌单；
 - 支持“歌曲名-歌手名”和“歌手名-歌曲名”两种文件命名顺序；
@@ -160,16 +178,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v0.8.0.jsplugin.zip`：安装包
-- `neo-lxbridge-v0.8.0.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v0.8.0-source.zip`：源码归档
+- `neo-lxbridge-v0.9.0.jsplugin.zip`：安装包
+- `neo-lxbridge-v0.9.0.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v0.9.0-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v0.8.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v0.9.0.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.8.0.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v0.9.0.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -254,7 +272,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.8.0.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v0.9.0.jsplugin.zip`。
 
 ## 安全与免责声明
 

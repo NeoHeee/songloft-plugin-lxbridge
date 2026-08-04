@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-              <span class="version-badge">v0.8.0</span>
+              <span class="version-badge">v0.9.0</span>
             </div>
             <p>动态音质 · 自定义音源桥接 · 自动降级</p>
           </div>
@@ -111,6 +111,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
           <span>下载管理</span>
           <span id="downloadCount" class="tab-count hidden">0</span>
+        </button>
+        <button class="tab" type="button" data-tab="upgrade">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M7 10l5-5 5 5"/><path d="M5 19h14"/></svg>
+          <span>安全洗版</span>
         </button>
         <button class="tab" type="button" data-tab="sources">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/></svg>
@@ -311,6 +315,112 @@
               <strong>暂无下载任务</strong>
               <p>在搜索结果中点击“下载”，任务会显示在这里。</p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-upgrade" class="panel">
+        <div class="card">
+          <div class="section-heading row between">
+            <div>
+              <span class="section-kicker">保留旧版</span>
+              <h2>安全洗版</h2>
+              <p class="muted">扫描本地低码率歌曲，匹配高音质候选并下载到独立目录。不会删除、覆盖或移动旧歌曲。</p>
+            </div>
+            <div class="row upgrade-heading-actions">
+              <button id="probeUnknownBitrates" class="secondary" type="button">重新探测未知码率</button>
+              <button id="scanUpgradeSongs" class="primary" type="button">扫描低音质歌曲</button>
+            </div>
+          </div>
+          <div class="upgrade-safety-note">
+            <strong>安全保证</strong>
+            <span>新版默认保存到 <code>/app/music/LxBridge-Upgrades</code>；旧文件、原歌曲记录和歌单关系始终保留。请试听确认后再自行处理旧版。</span>
+          </div>
+          <div class="upgrade-probe-note">
+            <strong>未知码率探测</strong>
+            <div class="upgrade-probe-copy">
+              <span>优先使用容器已有的 <code>ffprobe</code>；缺失时可自动下载插件私有版本，不修改 Songloft 镜像。数据库保存为 <code>music/...</code> 的相对路径会自动映射到 <code>/app/music/...</code>。仍不可用时根据文件大小和时长保守估算。</span>
+              <div class="upgrade-probe-options">
+                <label>每批数量
+                  <select id="probeBatchSize">
+                    <option value="50" selected>50 首（推荐）</option>
+                    <option value="100">100 首</option>
+                    <option value="200">200 首</option>
+                    <option value="500">500 首</option>
+                  </select>
+                </label>
+                <label>并发数量
+                  <select id="probeConcurrency">
+                    <option value="1">1 首（最稳妥）</option>
+                    <option value="2" selected>2 首（推荐）</option>
+                    <option value="3">3 首</option>
+                    <option value="4">4 首（SSD）</option>
+                  </select>
+                </label>
+              </div>
+              <div class="row upgrade-probe-tool-row">
+                <div id="probeToolStatus" class="probe-tool-alert checking"><span class="probe-tool-dot"></span><span><strong>正在检测 ffprobe</strong><small>请稍候…</small></span></div>
+                <button id="refreshProbeTool" class="mini-button" type="button">重新检测</button>
+                <button id="installProbeTool" class="mini-button" type="button">安装插件私有版</button>
+                <button id="removeProbeTool" class="mini-button hidden" type="button">删除插件私有版</button>
+              </div>
+            </div>
+          </div>
+          <div class="upgrade-settings-grid">
+            <div class="field">
+              <label for="upgradeMaxBitrate">扫描低于此码率</label>
+              <select id="upgradeMaxBitrate">
+                <option value="192">192 kbps</option>
+                <option value="256">256 kbps</option>
+                <option value="320" selected>320 kbps</option>
+                <option value="500">500 kbps</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="upgradeQuality">目标音质</label>
+              <select id="upgradeQuality">
+                <option value="320k">320K</option>
+                <option value="flac" selected>FLAC 无损</option>
+                <option value="flac24bit">FLAC 24-Bit</option>
+                <option value="hires">Hi-Res</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="upgradeDurationDiff">最大时长误差</label>
+              <select id="upgradeDurationDiff">
+                <option value="1">±1 秒</option>
+                <option value="3" selected>±3 秒</option>
+                <option value="5">±5 秒</option>
+                <option value="10">±10 秒</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="upgradeTargetDir">新版保存目录</label>
+              <input id="upgradeTargetDir" type="text" value="/LxBridge-Upgrades" placeholder="/LxBridge-Upgrades">
+              <small class="field-help">最终路径：<span id="upgradeResolvedPath">/app/music/LxBridge-Upgrades</span></small>
+            </div>
+          </div>
+          <details class="upgrade-score-help">
+            <summary>匹配分如何计算？</summary>
+            <div class="upgrade-score-help-body">
+              <div><strong>歌名（最高 100 分）</strong><span>完全一致 +100；一方包含另一方 +60。</span></div>
+              <div><strong>歌手（最高 60 分）</strong><span>完全一致 +60；一方包含另一方 +35。</span></div>
+              <div><strong>时长（最高 30 分）</strong><span>完全一致 +30；每相差 1 秒扣 1 分，最低为 0。</span></div>
+              <p>满分 190 分。原歌曲有歌手信息时至少需要 130 分，没有歌手信息时至少需要 90 分；超过上方“最大时长误差”的候选会直接排除。同分时优先选择时长差更小的歌曲。格式、容量、码率和目标音质不参与匹配分。</p>
+            </div>
+          </details>
+          <p id="upgradeScanState" class="muted"></p>
+          <div id="upgradeScanSummary" class="upgrade-scan-summary hidden"></div>
+          <div id="upgradeFormatSummary" class="upgrade-format-summary hidden"></div>
+          <section id="upgradeUnknownSection" class="upgrade-unknown-section hidden">
+            <div class="row between upgrade-unknown-heading">
+              <div><strong>码率未知歌曲</strong><span id="upgradeUnknownCount"></span></div>
+              <button id="toggleUnknownSongs" class="mini-button" type="button">展开列表</button>
+            </div>
+            <div id="upgradeUnknownList" class="upgrade-unknown-list hidden"></div>
+          </section>
+          <div id="upgradeSongList" class="upgrade-song-list">
+            <div class="empty-state compact-empty"><strong>尚未扫描</strong><p>点击“扫描低音质歌曲”后，这里会显示符合条件的本地歌曲。</p></div>
           </div>
         </div>
       </section>
