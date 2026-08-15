@@ -1,6 +1,6 @@
 import { downloadDirectoryError, getRequestProtectionSettings } from './settings';
 
-export type DownloadJobStatus = 'queued' | 'downloading' | 'completed' | 'failed';
+export type DownloadJobStatus = 'pending' | 'resolving' | 'queued' | 'downloading' | 'verifying' | 'completed' | 'failed';
 
 export interface DownloadJob {
   id: string;
@@ -8,6 +8,9 @@ export interface DownloadJob {
   title: string;
   artist?: string;
   status: DownloadJobStatus;
+  progress: number;
+  status_detail?: string;
+  client_key?: string;
   path?: string;
   error?: string;
   already_downloaded?: boolean;
@@ -38,6 +41,48 @@ export class DownloadManager {
   private counter = 0;
   private lastAttemptFinishedAt = 0;
 
+  reserve(song: { title?: string; artist?: string }, metadata: Partial<Pick<DownloadJob, 'target_dir' | 'path_template' | 'client_key'>> = {}): DownloadJob {
+    const now = Date.now();
+    const job: DownloadJob = {
+      id: this.createId(0), song_id: 0, title: song.title || '未知歌曲', artist: song.artist || '',
+      status: 'pending', progress: 0, status_detail: '等待解析', ...metadata, created_at: now, updated_at: now,
+    };
+    this.jobs.set(job.id, job);
+    this.cleanup();
+    return { ...job };
+  }
+
+  setStage(id: string, status: 'resolving' | 'verifying', progress: number, detail?: string): DownloadJob {
+    const job = this.jobs.get(id);
+    if (!job) throw new Error('下载任务不存在或已过期');
+    job.status = status; job.progress = Math.max(0, Math.min(100, progress));
+    job.status_detail = detail; job.updated_at = Date.now();
+    return { ...job };
+  }
+
+  activate(id: string, song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type'>> = {}): DownloadJob {
+    const job = this.jobs.get(id);
+    if (!job) throw new Error('下载任务不存在或已过期');
+    if (!song.id) throw new Error('歌曲 ID 无效');
+    job.song_id = song.id; job.title = song.title || job.title; job.artist = song.artist || job.artist;
+    Object.assign(job, metadata); job.updated_at = Date.now();
+    if (song.type === 'local') {
+      job.status = 'completed'; job.progress = 100; job.status_detail = '文件已存在';
+      job.path = song.file_path || ''; job.already_downloaded = true;
+      return { ...job };
+    }
+    job.status = 'queued'; job.progress = 35; job.status_detail = '等待下载';
+    this.activeBySong.set(song.id, job.id); this.queue.push(job.id); this.startDrain();
+    return { ...job };
+  }
+
+  fail(id: string, error: unknown): DownloadJob {
+    const job = this.jobs.get(id);
+    if (!job) throw new Error('下载任务不存在或已过期');
+    job.status = 'failed'; job.status_detail = '处理失败'; job.error = errorMessage(error); job.updated_at = Date.now();
+    return { ...job };
+  }
+
   enqueue(song: { id: number; title?: string; artist?: string; type?: string; file_path?: string }, metadata: Partial<Pick<DownloadJob, 'total_bytes' | 'actual_quality' | 'content_type' | 'target_dir' | 'path_template' | 'upgrade_source_song_id' | 'upgrade_source_bitrate' | 'upgrade_target_quality'>> = {}): DownloadJob {
     if (!song.id) throw new Error('歌曲 ID 无效');
 
@@ -48,6 +93,7 @@ export class DownloadManager {
         title: song.title || '未知歌曲',
         artist: song.artist || '',
         status: 'completed',
+        progress: 100,
         ...metadata,
         path: song.file_path || '',
         already_downloaded: true,
@@ -62,7 +108,7 @@ export class DownloadManager {
     const existingId = this.activeBySong.get(song.id);
     if (existingId) {
       const existing = this.jobs.get(existingId);
-      if (existing && (existing.status === 'queued' || existing.status === 'downloading')) return { ...existing };
+      if (existing && ['pending','resolving','queued','downloading','verifying'].includes(existing.status)) return { ...existing };
     }
 
     const job: DownloadJob = {
@@ -71,6 +117,7 @@ export class DownloadManager {
       title: song.title || '未知歌曲',
       artist: song.artist || '',
       status: 'queued',
+      progress: 35,
       ...metadata,
       created_at: Date.now(),
       updated_at: Date.now(),
@@ -98,8 +145,11 @@ export class DownloadManager {
   retry(id: string): DownloadJob {
     const job = this.jobs.get(id);
     if (!job) throw new Error('下载任务不存在或已过期');
-    if (job.status === 'queued' || job.status === 'downloading') return { ...job };
+    if (['pending','resolving','queued','downloading','verifying'].includes(job.status)) return { ...job };
+    if (!job.song_id) throw new Error('解析失败的任务请重新发起下载');
     job.status = 'queued';
+    job.progress = 35;
+    job.status_detail = '等待下载';
     job.error = undefined;
     job.path = undefined;
     job.already_downloaded = false;
@@ -112,14 +162,18 @@ export class DownloadManager {
 
   remove(id: string): boolean {
     const job = this.jobs.get(id);
-    if (!job || job.status === 'queued' || job.status === 'downloading') return false;
+    if (!job || ['downloading','verifying'].includes(job.status)) return false;
+    if (['pending','resolving','queued'].includes(job.status)) {
+      this.queue = this.queue.filter(queuedId => queuedId !== id);
+      if (job.song_id && this.activeBySong.get(job.song_id) === id) this.activeBySong.delete(job.song_id);
+    }
     return this.jobs.delete(id);
   }
 
   clearFinished(): number {
     let count = 0;
     for (const job of Array.from(this.jobs.values())) {
-      if (job.status !== 'queued' && job.status !== 'downloading' && this.jobs.delete(job.id)) count += 1;
+      if (!['pending','resolving','queued','downloading','verifying'].includes(job.status) && this.jobs.delete(job.id)) count += 1;
     }
     return count;
   }
@@ -153,6 +207,8 @@ export class DownloadManager {
       job.wait_until = undefined;
 
       job.status = 'downloading';
+      job.progress = 50;
+      job.status_detail = 'Songloft 正在下载文件';
       job.updated_at = Date.now();
       try {
         const current = await songloft.songs.getById(job.song_id);
@@ -160,6 +216,8 @@ export class DownloadManager {
 
         if (current.type === 'local') {
           job.status = 'completed';
+          job.progress = 100;
+          job.status_detail = '文件已存在';
           job.path = current.file_path || '';
           job.already_downloaded = true;
         } else {
@@ -171,7 +229,9 @@ export class DownloadManager {
             } : {}),
           });
           if (result.error) throw new Error(result.error);
-          job.status = 'completed';
+          job.status = 'verifying';
+          job.progress = 90;
+          job.status_detail = '正在校验下载结果';
           job.path = result.path || '';
           job.already_downloaded = false;
           if (job.upgrade_source_song_id) {
@@ -194,10 +254,14 @@ export class DownloadManager {
               job.verification_message = `新版已下载，但无法读取实际音质进行验证：${errorMessage(verificationError)}；请试听检查，旧版已保留`;
             }
           }
+          job.status = 'completed';
+          job.progress = 100;
+          job.status_detail = '下载完成';
         }
         job.error = undefined;
       } catch (error) {
         job.status = 'failed';
+        job.status_detail = '下载失败';
         const rawError = errorMessage(error);
         job.error = job.target_dir ? downloadDirectoryError(rawError, job.target_dir) : rawError;
         songloft.log.error(`[neo-lxbridge] 下载歌曲失败 (${job.title}): ${job.error}`);
@@ -213,13 +277,13 @@ export class DownloadManager {
   private cleanup(): void {
     const now = Date.now();
     const expired = Array.from(this.jobs.values())
-      .filter(job => job.status !== 'queued' && job.status !== 'downloading' && now - job.updated_at > 30 * 60 * 1000)
+      .filter(job => !['pending','resolving','queued','downloading','verifying'].includes(job.status) && now - job.updated_at > 30 * 60 * 1000)
       .map(job => job.id);
     for (const id of expired) this.jobs.delete(id);
 
     if (this.jobs.size <= 100) return;
     const removable = Array.from(this.jobs.values())
-      .filter(job => job.status !== 'queued' && job.status !== 'downloading')
+      .filter(job => !['pending','resolving','queued','downloading','verifying'].includes(job.status))
       .sort((a, b) => a.updated_at - b.updated_at);
     while (this.jobs.size > 100 && removable.length) {
       this.jobs.delete((removable.shift() as DownloadJob).id);

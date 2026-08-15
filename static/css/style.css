@@ -1372,9 +1372,14 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   color: var(--muted-strong);
   background: var(--bg-soft);
 }
-.download-status.status-downloading, .download-status.status-queued { color: var(--blue); background: var(--blue-soft); }
+.download-status.status-pending, .download-status.status-resolving, .download-status.status-downloading, .download-status.status-queued, .download-status.status-verifying { color: var(--blue); background: var(--blue-soft); }
 .download-status.status-completed { color: var(--green); background: var(--green-soft); }
 .download-status.status-failed { color: var(--danger); background: var(--danger-soft); }
+.download-progress { position: relative; height: 7px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: var(--bg-soft); }
+.download-progress > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--blue)); transition: width .3s ease; }
+.download-progress.is-indeterminate > span { width: 38% !important; animation: download-progress-slide 1.25s ease-in-out infinite; }
+.download-stage-detail { margin-top: 6px !important; }
+@keyframes download-progress-slide { from { transform: translateX(-110%); } to { transform: translateX(285%); } }
 .download-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .download-actions .secondary, .download-actions .danger-button { min-height: 36px; font-size: 12px; }
 
