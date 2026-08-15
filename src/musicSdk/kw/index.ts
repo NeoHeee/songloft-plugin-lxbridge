@@ -2,7 +2,7 @@ import type { MusicPlatform, MusicInfo } from '../../types';
 import { httpFetch } from '../request';
 import { arr, makeMusicInfo, normalizeCover, obj, page, staticSorts } from '../platform-common';
 
-const headers = { Referer: 'https://www.kuwo.cn/', csrf: '0' };
+const headers = { Referer: 'https://www.kuwo.cn/', 'User-Agent': 'Mozilla/5.0' };
 
 function parseSong(raw: Record<string, any>): MusicInfo {
   const id = String(raw.MUSICRID || raw.rid || raw.musicrid || raw.id || '').replace(/^MUSIC_/, '');
@@ -58,14 +58,16 @@ const kw: MusicPlatform = {
     async tags() { return { source: 'kw', list: [{ id: '全部', name: '全部' }, { id: '流行', name: '流行' }, { id: '摇滚', name: '摇滚' }, { id: '民谣', name: '民谣' }] }; },
     async list(params) {
       const pn = Math.max(1, Number(params.page || 1)); const rn = Math.max(1, Number(params.limit || 30));
-      const { body } = await httpFetch(`https://www.kuwo.cn/api/www/classify/playlist/getRcmPlayList?pn=${pn}&rn=${rn}&order=${encodeURIComponent(params.sort || 'hot')}&httpsStatus=1`, { headers }).promise;
+      const { body } = await httpFetch(`http://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPlayList?loginUid=0&loginSid=0&appUid=76039576&pn=${pn}&rn=${rn}&order=${encodeURIComponent(params.sort || 'hot')}`, { headers }).promise;
       const data = obj(obj(body).data || body); const rows = arr(data.data || data.list);
+      if (!rows.length && obj(body).success === false) throw new Error(`酷我热门歌单获取失败：${String(obj(body).message || '上游接口拒绝请求')}`);
       return { source: 'kw', page: pn, limit: rn, total: Number(data.total || rows.length), list: rows.map(x => { const r=obj(x); return { id:String(r.id||r.pid||''), name:String(r.name||r.title||''), img:normalizeCover(r.img||r.pic), playCount:Number(r.listencnt||r.playCount||0), description:String(r.info||'') }; }) };
     },
     async detail(id, pageNo = 1, limit = 100) {
-      const { body } = await httpFetch(`https://www.kuwo.cn/api/www/playlist/playListInfo?pid=${encodeURIComponent(id)}&pn=${pageNo}&rn=${limit}&httpsStatus=1`, { headers }).promise;
-      const data = obj(obj(body).data || body); const rows = arr(data.musicList || data.list);
-      return { source: 'kw', id, name: data.name || data.title || '', img: normalizeCover(data.img || data.pic), total: Number(data.total || rows.length), page: pageNo, limit, list: rows.map(x => parseSong(obj(x))) };
+      const { body } = await httpFetch(`http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=${encodeURIComponent(id)}&pn=${Math.max(0, pageNo - 1)}&rn=${limit}&encode=utf8&keyset=pl2012&identity=kuwo&pcmp4=1&vipver=MUSIC_9.0.5.0_W1&newver=1`, { headers }).promise;
+      const data = obj(body); const rows = arr(data.musiclist || data.musicList || data.list);
+      if (!rows.length && Number(data.total || 0) > 0) throw new Error('酷我歌单详情返回异常，请稍后重试');
+      return { source: 'kw', id, name: data.title || data.name || '', img: normalizeCover(data.pic || data.img), total: Number(data.total || rows.length), page: pageNo, limit, list: rows.map(x => parseSong(obj(x))) };
     },
     async search(keyword, pageNo = 1, limit = 30) {
       const { body } = await httpFetch(`https://www.kuwo.cn/api/www/search/searchPlayListBykeyWord?key=${encodeURIComponent(keyword)}&pn=${pageNo}&rn=${limit}&httpsStatus=1`, { headers }).promise;

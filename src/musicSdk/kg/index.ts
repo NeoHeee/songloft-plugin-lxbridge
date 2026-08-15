@@ -7,8 +7,8 @@ const headers = { Referer: 'https://www.kugou.com/', 'User-Agent': 'Mozilla/5.0'
 
 function parseSong(raw: Record<string, any>): MusicInfo {
   const hash = String(raw.FileHash || raw.filehash || raw.hash || raw.HASH || '');
-  const sq = String(raw.SQFileHash || raw.sqhash || '');
-  const hq = String(raw.HQFileHash || raw.hqhash || '');
+  const sq = String(raw.SQFileHash || raw.sqhash || raw.hash_flac || '');
+  const hq = String(raw.HQFileHash || raw.hqhash || raw.hash_320 || '');
   const types: Array<{type:string}> = [];
   if (sq) types.push({type:'flac'}); if (hq) types.push({type:'320k'}); types.push({type:'128k'});
   return makeMusicInfo('kg', raw, {
@@ -23,6 +23,31 @@ function parseSong(raw: Record<string, any>): MusicInfo {
     albumId: raw.AlbumID ?? raw.album_id,
     extra: { hqHash: hq, sqHash: sq, types },
   });
+}
+
+export function parseKugouPlaylistDetail(body: unknown): { rows: Record<string, any>[]; total: number } {
+  if (typeof body === 'string') {
+    const declaration = /\bvar\s+data\s*=\s*\[/.exec(body);
+    if (!declaration) return { rows: [], total: 0 };
+    const start = body.indexOf('[', declaration.index);
+    let depth = 0; let inString = false; let escaped = false; let end = -1;
+    for (let index = start; index < body.length; index += 1) {
+      const char = body[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === '\\') escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === '[') depth += 1;
+      else if (char === ']' && --depth === 0) { end = index + 1; break; }
+    }
+    if (end < 0) return { rows: [], total: 0 };
+    try { const rows = JSON.parse(body.slice(start, end)); return { rows: arr(rows).map(obj), total: arr(rows).length }; } catch { return { rows: [], total: 0 }; }
+  }
+  const d=obj(obj(body).list||body);const info=obj(d.info||d);const rows=arr(info.list||info.info).map(obj);
+  return { rows, total: Number(info.total||rows.length) };
 }
 
 async function search(keyword:string, pageNo=1, limit=30) {
@@ -48,7 +73,7 @@ const kg:MusicPlatform={
   songList:{
     async tags(){return {source:'kg',list:[{id:'0',name:'热门'},{id:'1',name:'流行'},{id:'2',name:'经典'}]};},
     async list(params){const p=Number(params.page||1);const {body}=await httpFetch(`https://m.kugou.com/plist/index&json=true&page=${p}`,{headers}).promise;const d=obj(obj(body).plist||body);const info=obj(d.list||d);const rows=arr(info.info||info.list);return {source:'kg',page:p,total:Number(info.total||rows.length),list:rows.map(x=>{const r=obj(x);return {id:String(r.specialid||r.id||''),name:String(r.specialname||r.name||''),img:normalizeCover(r.imgurl||r.img),playCount:Number(r.playcount||0)};})};},
-    async detail(id,pageNo=1,limit=100){const {body}=await httpFetch(`https://m.kugou.com/plist/list/${encodeURIComponent(id)}?json=true&page=${pageNo}&pagesize=${limit}`,{headers}).promise;const d=obj(obj(body).list||body);const info=obj(d.info||d);const rows=arr(info.list||info.info);return {source:'kg',id,page:pageNo,limit,total:Number(info.total||rows.length),list:rows.slice(0,limit).map(x=>parseSong(obj(x)))};},
+    async detail(id,pageNo=1,limit=100){const {body}=await httpFetch(`https://m.kugou.com/plist/list/${encodeURIComponent(id)}?json=true&page=${pageNo}&pagesize=${limit}`,{headers}).promise;const parsed=parseKugouPlaylistDetail(body);if(!parsed.rows.length)throw new Error('酷狗歌单详情未返回歌曲，可能是上游页面结构已变化');return {source:'kg',id,page:pageNo,limit,total:parsed.total,list:parsed.rows.slice(0,limit).map(parseSong)};},
     async search(keyword,pageNo=1,limit=30){const {body}=await httpFetch(`https://specialsearch.kugou.com/special_search?keyword=${encodeURIComponent(keyword)}&page=${pageNo}&pagesize=${limit}&userid=-1&clientver=&platform=WebFilter&filter=2`,{headers}).promise;const d=obj(obj(body).data||body);const rows=arr(d.lists||d.list||d.info);return {source:'kg',page:pageNo,limit,total:Number(d.total||d.total_count||rows.length),list:rows.map(x=>{const r=obj(x);return {id:String(r.specialid||r.special_id||r.id||''),name:String(r.specialname||r.special_name||r.name||''),img:normalizeCover(r.imgurl||r.img||r.cover),playCount:Number(r.playcount||r.play_count||0),creator:String(r.nickname||r.username||r.creator||''),description:String(r.intro||r.description||'')};}).filter(x=>x.id&&x.name)};},
     async sorts(){return staticSorts('kg');},
   },
