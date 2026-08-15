@@ -29,6 +29,30 @@ const downloadApi = downloadHandlers(downloadManager);
 const upgradeApi = upgradeHandlers();
 const lxSyncService = new LxSyncService();
 let initialized = false;
+let miotRegistrationTimer: ReturnType<typeof setTimeout> | null = null;
+
+function registerToMiot(): void {
+  let attempts = 0;
+  const tryRegister = async (): Promise<void> => {
+    attempts += 1;
+    try {
+      if (!songloft.comm || typeof songloft.comm.call !== 'function') return;
+      await songloft.comm.call('miot', 'register-search-provider', {
+        name: 'Songloft LxBridge',
+        searchPath: '/api/search/topone',
+        icon: '',
+      });
+      songloft.log.info('[neo-lxbridge] registered as MIoT search provider');
+    } catch (error) {
+      if (attempts < 5 && initialized) {
+        miotRegistrationTimer = setTimeout(tryRegister, 3000);
+      } else {
+        songloft.log.warn(`[neo-lxbridge] MIoT search provider registration skipped: ${String(error)}`);
+      }
+    }
+  };
+  miotRegistrationTimer = setTimeout(tryRegister, 2000);
+}
 
 router.get('/', async (req) => ({
   statusCode: 302,
@@ -193,11 +217,21 @@ async function onInit(): Promise<void> {
   }
   await sourceManager.init();
   initialized = true;
+  registerToMiot();
   songloft.log.info(`[neo-lxbridge] initialized, ${runtimeManager.getStatus().length} source runtime(s) active`);
 }
 
 async function onDeinit(): Promise<void> {
   initialized = false;
+  if (miotRegistrationTimer) {
+    clearTimeout(miotRegistrationTimer);
+    miotRegistrationTimer = null;
+  }
+  try {
+    if (songloft.comm && typeof songloft.comm.call === 'function') {
+      await songloft.comm.call('miot', 'unregister-search-provider', {}, 2000);
+    }
+  } catch { /* MIoT may be absent or already stopped. */ }
   lxSyncService.dropAllConnections();
   await runtimeManager.destroyAll();
   songloft.log.info('[neo-lxbridge] deinitialized');

@@ -1894,6 +1894,7 @@
   function updateExternalExample(quality) {
     const endpoint = `${location.origin}${root}/external/search`;
     $('externalEndpoint').value = endpoint;
+    $('toponeEndpoint').value = `${location.origin}${root}/api/search/topone`;
     $('externalExample').textContent = `// 请求头
 Content-Type: application/json
 
@@ -1954,6 +1955,7 @@ curl -X POST "${endpoint}" \
   }
 
   $('copyExternalEndpoint').addEventListener('click', () => copyText($('externalEndpoint').value));
+  $('copyToponeEndpoint').addEventListener('click', () => copyText($('toponeEndpoint').value));
 
   function renderLxSyncSettings(settings) {
     state.lxSyncSettings = settings || {};

@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-          <span class="version-badge">v1.0.1</span>
+          <span class="version-badge">v1.0.2</span>
             </div>
             <p>开放音源桥接 · 私人音乐管理</p>
           </div>
@@ -746,6 +746,25 @@
                   <button id="copyExternalEndpoint" class="secondary" type="button">复制</button>
                 </div>
               </div>
+            </div>
+
+            <div class="api-info-grid api-secondary-endpoint">
+              <div class="api-info-item">
+                <span>适用场景</span>
+                <strong>智能音箱插件</strong>
+              </div>
+              <div class="api-info-item endpoint-item">
+                <span>Topone 接口地址</span>
+                <div class="endpoint-copy-row">
+                  <input id="toponeEndpoint" class="endpoint-input" readonly>
+                  <button id="copyToponeEndpoint" class="secondary" type="button">复制</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="api-notice api-topone-notice">
+              <strong>智能音箱插件调用说明</strong>
+              <p>该接口按 <code>topone</code> 格式只返回匹配度最高的一首歌曲，供 Songloft 智能音箱插件的“外部搜索”功能使用。新版智能音箱插件可在“快速选择”中直接选择 <code>Songloft LxBridge</code>，无需手动填写地址。</p>
             </div>
 
             <div class="api-notice">

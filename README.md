@@ -4,6 +4,14 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v1.0.2
+
+发布版本：`v1.0.2`。
+
+- 外部搜索接口页面新增智能音箱专用的 `topone` 接口地址、用途说明和一键复制；
+- LxBridge 自动注册为智能音箱插件的外部搜索候选，可在“快速选择”中直接选用；
+- `topone` 接口加入公开路径，支持智能音箱插件按最佳匹配结果调用。
+
 ## v1.0.1
 
 发布版本：`v1.0.1`。
@@ -218,16 +226,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v1.0.1.jsplugin.zip`：安装包
-- `neo-lxbridge-v1.0.1.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v1.0.1-source.zip`：源码归档
+- `neo-lxbridge-v1.0.2.jsplugin.zip`：安装包
+- `neo-lxbridge-v1.0.2.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v1.0.2-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v1.0.1.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v1.0.2.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v1.0.1.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v1.0.2.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -297,6 +305,8 @@ dist/neo-lxbridge.jsplugin.zip
 
 所有路径均位于前缀 `/api/v1/jsplugin/neo-lxbridge` 下。
 
+其中 `/external/search` 用于返回多条标准化搜索结果；`/api/search/topone` 按 topone 规范只返回匹配度最高的一首歌曲，供 Songloft 智能音箱插件的外部搜索功能使用。LxBridge 会通过插件间通信自动注册为候选搜索源，在支持该协议的新版智能音箱插件中可直接从“快速选择”选择 `Songloft LxBridge`，无需手动填写接口地址。
+
 ## 构建
 
 ```bash
@@ -312,7 +322,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v1.0.1.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v1.0.2.jsplugin.zip`。
 
 ## 安全与免责声明
 
