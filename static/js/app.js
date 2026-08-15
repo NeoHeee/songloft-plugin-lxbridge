@@ -404,14 +404,20 @@
       const downloadJob = state.downloadJobs[selectedKey(item)] || null;
       const downloadLabel = downloadJob?.status === 'completed'
         ? '已下载'
+        : downloadJob?.status === 'pending'
+          ? '等待解析'
+          : downloadJob?.status === 'resolving'
+            ? '解析中'
         : downloadJob?.status === 'downloading'
           ? `下载中${downloadJob.total_bytes != null ? ` · ${formatBytes(downloadJob.total_bytes)}` : ''}`
+          : downloadJob?.status === 'verifying'
+            ? '校验中'
           : downloadJob?.status === 'queued'
             ? `排队中${downloadJob.total_bytes != null ? ` · ${formatBytes(downloadJob.total_bytes)}` : ''}`
             : downloadJob?.status === 'failed'
               ? '重试'
               : '下载';
-      const downloadDisabled = ['queued', 'downloading', 'completed'].includes(downloadJob?.status || '') ? ' disabled' : '';
+      const downloadDisabled = ['pending', 'resolving', 'queued', 'downloading', 'verifying', 'completed'].includes(downloadJob?.status || '') ? ' disabled' : '';
       return `<article class="result-item">
         <input class="result-check" type="checkbox" data-index="${index}" ${checked ? 'checked' : ''} aria-label="选择 ${escapeHtml(item.title)}">
         ${coverMarkup(item.cover_url, item.title)}
@@ -1340,7 +1346,7 @@
   });
 
   function downloadStatusLabel(status) {
-    return { queued: '排队中', downloading: '下载中', completed: '已完成', failed: '失败' }[status] || status;
+    return { pending: '等待解析', resolving: '解析中', queued: '等待下载', downloading: '下载中', verifying: '校验中', completed: '下载完成', failed: '失败' }[status] || status;
   }
 
   function downloadStatusText(job) {
@@ -1355,12 +1361,12 @@
     if (!list) return;
     const filter = $('downloadFilter')?.value || 'all';
     const jobs = state.downloadTaskList.filter(job => {
-      if (filter === 'active') return job.status === 'queued' || job.status === 'downloading';
+      if (filter === 'active') return ['pending', 'resolving', 'queued', 'downloading', 'verifying'].includes(job.status);
       return filter === 'all' || job.status === filter;
     });
     const counts = state.downloadTaskList.reduce((result, job) => {
       result.total += 1;
-      if (job.status === 'queued' || job.status === 'downloading') result.active += 1;
+      if (['pending', 'resolving', 'queued', 'downloading', 'verifying'].includes(job.status)) result.active += 1;
       if (job.status === 'completed') result.completed += 1;
       if (job.status === 'failed') result.failed += 1;
       return result;
@@ -1389,14 +1395,19 @@
             <span class="download-status ${statusClass}">${escapeHtml(downloadStatusText(job))}</span>
           </div>
           <p>${details}</p>
+          <div class="download-progress ${job.status === 'downloading' ? 'is-indeterminate' : ''}" role="progressbar" aria-label="${escapeHtml(downloadStatusText(job))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, Number(job.progress || 0)))}">
+            <span style="width:${Math.max(0, Math.min(100, Number(job.progress || 0)))}%"></span>
+          </div>
+          ${job.status_detail ? `<p class="download-stage-detail">${escapeHtml(job.status_detail)}</p>` : ''}
           ${job.error ? `<p class="download-error">${escapeHtml(job.error)}</p>` : ''}
           ${job.verification_message ? `<p class="${job.verification_status === 'passed' ? 'download-verification-passed' : 'download-verification-warning'}">${escapeHtml(job.verification_message)}</p>` : ''}
           ${job.path ? `<p class="download-path" title="${escapeHtml(job.path)}">${escapeHtml(job.path)}</p>` : ''}
         </div>
         <div class="download-actions">
-          ${job.status === 'failed' ? `<button class="secondary" type="button" data-download-retry="${escapeHtml(job.id)}">重试</button>` : ''}
+          ${job.status === 'failed' && Number(job.song_id) > 0 ? `<button class="secondary" type="button" data-download-retry="${escapeHtml(job.id)}">重试</button>` : ''}
           ${job.path ? `<button class="secondary" type="button" data-download-copy="${escapeHtml(job.path)}">复制路径</button>` : ''}
-          ${['completed', 'failed'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}">删除记录</button>` : ''}
+          ${['pending', 'resolving', 'queued'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}" data-download-remove-kind="cancel">取消任务</button>` : ''}
+          ${['completed', 'failed'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}" data-download-remove-kind="record">删除记录</button>` : ''}
         </div>
       </article>`;
     }).join('');
@@ -1412,7 +1423,9 @@
     }));
     list.querySelectorAll('[data-download-remove]').forEach(button => button.addEventListener('click', async () => {
       try {
+        const cancelling = button.dataset.downloadRemoveKind === 'cancel';
         await request(`/api/songs/download?id=${encodeURIComponent(button.dataset.downloadRemove)}`, { method: 'DELETE' });
+        if (cancelling) toast('已取消下载任务');
         loadDownloads();
       } catch (error) { toast(error.message, 5200); }
     }));
@@ -1424,8 +1437,10 @@
     try {
       const resp = await request('/api/songs/download');
       state.downloadTaskList = resp.data?.jobs || [];
+      state.downloadTaskList.forEach(job => { if (job.client_key) state.downloadJobs[job.client_key] = job; });
       renderDownloads();
-      if (state.downloadTaskList.some(job => job.status === 'queued' || job.status === 'downloading')) {
+      renderResults();
+      if (state.downloadTaskList.some(job => ['pending', 'resolving', 'queued', 'downloading', 'verifying'].includes(job.status))) {
         state.downloadManagerTimer = setTimeout(loadDownloads, 1400);
       }
     } catch (error) {
@@ -1529,13 +1544,25 @@
     const button = $('batchDownloadButton');
     const options = await openDownloadModal({ count: state.selected.length });
     if (!options) return;
-    setBusy(button, true, '正在逐首加入队列');
+    setBusy(button, true, '正在创建任务');
     const items = [...state.selected];
     try {
-      for (const item of items) {
-        await startDownload(item, null, { downloadOptions: options, skipConfirm: true });
-      }
-      toast(`已处理 ${items.length} 首歌曲，下载任务将按安全间隔串行执行`, 5200);
+      const resp = await request('/api/songs/download/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songs: items.map(item => ({ ...item, _download_client_key: selectedKey(item) })),
+          download_options: options,
+          quality: $('quality').value || '320k',
+          allow_downgrade: allowAutoDowngrade(),
+        }),
+      });
+      const jobs = resp.data?.jobs || [];
+      jobs.forEach((job, index) => {
+        state.downloadTaskList.unshift(job);
+        if (items[index]) state.downloadJobs[selectedKey(items[index])] = job;
+      });
+      toast(`已创建 ${jobs.length} 条下载任务，正在后台逐首解析`, 5200);
       activateTab('downloads');
       loadDownloads();
     } finally {

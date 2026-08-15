@@ -50,7 +50,7 @@ function parseTotalBytes(headers: unknown): number | null {
   return Number.isFinite(length) && length >= 0 ? length : null;
 }
 
-async function probeAudio(url: string, requestHeaders: Record<string, string>) {
+export async function probeAudio(url: string, requestHeaders: Record<string, string>) {
   type ProbeResult = {
     total_bytes: number | null;
     content_type: string;
