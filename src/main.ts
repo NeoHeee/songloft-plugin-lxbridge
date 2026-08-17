@@ -18,6 +18,8 @@ import { getPlaybackSettings, setPlaybackSettings } from './playback/settings';
 import { handleLxProtocolHttp } from './lx_sync/protocol_http';
 import { handleLxSyncWebSocket } from './lx_sync/protocol_ws';
 import { LxSyncService } from './lx_sync/service';
+import { addSearchHistory, clearSearchHistory, getHotSearches, getSearchHistory, removeSearchHistory } from './search/discovery';
+import { loadSharedPlaylist } from './songlist/shared';
 
 const router = createRouter();
 const runtimeManager = new RuntimeManager();
@@ -74,6 +76,29 @@ router.get('/api/status', async () => jsonResponse({
 }));
 
 router.post('/api/search', createSearchRoute());
+router.get('/api/search/discovery', async () => {
+  const [hot, history] = await Promise.all([getHotSearches(), getSearchHistory()]);
+  return jsonResponse({ code: 0, msg: 'success', data: { hot: hot.keywords, hot_source: hot.source, hot_cached: hot.cached, history } });
+});
+router.post('/api/search/history', async (req) => {
+  try {
+    const body = parseJSONBody<{ keyword?: string }>(req);
+    return jsonResponse({ code: 0, msg: 'success', data: { history: await addSearchHistory(body.keyword) } });
+  } catch (error) {
+    return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
+  }
+});
+router.delete('/api/search/history', async (req) => {
+  try {
+    const query = new URLSearchParams(req.query || '');
+    const history = query.get('all') === 'true'
+      ? await clearSearchHistory()
+      : await removeSearchHistory(query.get('keyword'));
+    return jsonResponse({ code: 0, msg: 'success', data: { history } });
+  } catch (error) {
+    return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
+  }
+});
 router.post('/api/music/url', createMusicUrlRoute(runtimeManager));
 router.post('/api/songs/import', importSongsHandler);
 router.post('/api/songs/download', downloadApi.create);
@@ -102,12 +127,11 @@ router.get('/api/settings/download', async () => jsonResponse({
 }));
 router.put('/api/settings/download', async (req) => {
   try {
-    const body = parseJSONBody<{ target_dir?: string; target_dir_input?: string; create_artist_folder?: boolean; filename_order?: 'title_artist' | 'artist_title'; ask_each_time?: boolean; favorite_dirs?: string[]; enabled?: boolean; download_interval_ms?: number; playback_interval_ms?: number }>(req);
+    const body = parseJSONBody<{ target_dir?: string; target_dir_input?: string; create_artist_folder?: boolean; filename_order?: 'title_artist' | 'artist_title'; favorite_dirs?: string[]; enabled?: boolean; download_interval_ms?: number; playback_interval_ms?: number }>(req);
     const pathSettings = await setDownloadPathSettings({
       target_dir_input: body.target_dir_input ?? body.target_dir,
       create_artist_folder: body.create_artist_folder,
       filename_order: body.filename_order,
-      ask_each_time: body.ask_each_time,
       favorite_dirs: body.favorite_dirs,
     });
     const protection = await setRequestProtectionSettings(body);
@@ -156,6 +180,14 @@ router.delete('/api/sources', sourceApi.remove);
 router.put('/api/sources/toggle', sourceApi.toggle);
 
 router.get('/api/songlist/:action', async (req, params) => await songListHandler(req, params.action));
+router.post('/api/songlist/shared', async (req) => {
+  try {
+    const body = parseJSONBody<{ url?: string }>(req);
+    return jsonResponse({ code: 0, msg: 'success', data: await loadSharedPlaylist(body.url) });
+  } catch (error) {
+    return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);
+  }
+});
 router.get('/api/leaderboard/:action', async (req, params) => await leaderboardHandler(req, params.action));
 router.post('/api/direct/music/url', directApi.musicUrl);
 router.post('/api/direct/music/probe', directApi.musicProbe);

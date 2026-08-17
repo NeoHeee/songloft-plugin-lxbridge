@@ -23,7 +23,7 @@
     downloadManagerTimer: 0,
     downloadSettings: {
       target_dir_input: '', target_dir: '', create_artist_folder: false,
-      filename_order: 'title_artist', ask_each_time: false, favorite_dirs: [],
+      filename_order: 'title_artist', favorite_dirs: [],
     },
     playbackSettings: {
       default_quality: '320k', allow_auto_downgrade: true, configured: false,
@@ -45,6 +45,14 @@
     browseCatalog: [],
     browseSongs: [],
     browseTitle: '',
+    sharedPlaylistSongs: [],
+    sharedPlaylistSource: '',
+    sharedPlaylistTitle: '',
+    sharedPlaylistTotal: 0,
+    hotSearches: [],
+    hotSearchSource: '',
+    searchHistory: [],
+    searchDiscoveryExpanded: true,
   };
 
   const $ = id => document.getElementById(id);
@@ -463,6 +471,74 @@
     updateSelectionCount();
   }
 
+  function setSearchDiscoveryExpanded(expanded) {
+    state.searchDiscoveryExpanded = Boolean(expanded);
+    $('searchDiscovery').classList.toggle('is-collapsed', !state.searchDiscoveryExpanded);
+    $('toggleSearchDiscovery').setAttribute('aria-expanded', String(state.searchDiscoveryExpanded));
+    $('searchDiscoveryToggleLabel').textContent = state.searchDiscoveryExpanded ? '收起' : '展开';
+  }
+
+  function renderSearchDiscovery() {
+    const hotSource = $('hotSearchSource');
+    hotSource.textContent = state.hotSearches.length
+      ? state.hotSearchSource === 'netease_mixed' ? '网易云实时热搜 + 推荐补充 · 点击搜索' : '内置推荐 · 点击搜索'
+      : '暂时不可用';
+    $('hotSearchList').innerHTML = state.hotSearches.length
+      ? state.hotSearches.map((keyword, index) => `<button class="search-chip" type="button" data-hot-search="${index}" title="搜索 ${escapeHtml(keyword)}">${escapeHtml(keyword)}</button>`).join('')
+      : '<span class="search-suggestion-empty">暂时没有热门推荐，可直接输入关键词搜索。</span>';
+
+    const historySection = $('searchHistorySection');
+    historySection.classList.toggle('hidden', state.searchHistory.length === 0);
+    $('searchHistoryList').innerHTML = state.searchHistory.map((keyword, index) => `<span class="search-history-chip">
+      <button type="button" data-history-search="${index}" title="再次搜索 ${escapeHtml(keyword)}">${escapeHtml(keyword)}</button>
+      <button type="button" data-history-remove="${index}" aria-label="删除搜索记录 ${escapeHtml(keyword)}" title="删除">×</button>
+    </span>`).join('');
+
+    $('hotSearchList').querySelectorAll('[data-hot-search]').forEach(button => button.addEventListener('click', () => runSuggestedSearch(state.hotSearches[Number(button.dataset.hotSearch)])));
+    $('searchHistoryList').querySelectorAll('[data-history-search]').forEach(button => button.addEventListener('click', () => runSuggestedSearch(state.searchHistory[Number(button.dataset.historySearch)])));
+    $('searchHistoryList').querySelectorAll('[data-history-remove]').forEach(button => button.addEventListener('click', () => removeHistoryKeyword(state.searchHistory[Number(button.dataset.historyRemove)])));
+  }
+
+  async function loadSearchDiscovery() {
+    try {
+      const resp = await request('/api/search/discovery');
+      state.hotSearches = Array.isArray(resp.data?.hot) ? resp.data.hot : [];
+      state.hotSearchSource = String(resp.data?.hot_source || '');
+      state.searchHistory = Array.isArray(resp.data?.history) ? resp.data.history : [];
+      renderSearchDiscovery();
+    } catch (error) {
+      state.hotSearches = [];
+      state.hotSearchSource = '';
+      renderSearchDiscovery();
+    }
+  }
+
+  async function saveHistoryKeyword(keyword) {
+    try {
+      const resp = await request('/api/search/history', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword }),
+      });
+      state.searchHistory = Array.isArray(resp.data?.history) ? resp.data.history : state.searchHistory;
+      renderSearchDiscovery();
+    } catch (error) {
+      // 搜索历史保存失败不应影响歌曲搜索。
+    }
+  }
+
+  async function removeHistoryKeyword(keyword) {
+    try {
+      const resp = await request(`/api/search/history?keyword=${encodeURIComponent(keyword)}`, { method: 'DELETE' });
+      state.searchHistory = Array.isArray(resp.data?.history) ? resp.data.history : [];
+      renderSearchDiscovery();
+    } catch (error) { toast(error.message, 4200); }
+  }
+
+  function runSuggestedSearch(keyword) {
+    if (!keyword) return;
+    $('keyword').value = keyword;
+    search();
+  }
+
   function browseArtist(value) {
     if (Array.isArray(value)) return value.map(item => typeof item === 'string' ? item : item?.name || '').filter(Boolean).join(' / ');
     if (value && typeof value === 'object') return value.name || value.title || '';
@@ -484,6 +560,95 @@
       },
     };
   }
+
+  function filteredSharedPlaylistSongs() {
+    const keyword = $('sharedPlaylistSearch').value.trim().toLocaleLowerCase();
+    if (!keyword) return state.sharedPlaylistSongs.map((item, index) => ({ item, index }));
+    return state.sharedPlaylistSongs
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => `${item.title} ${item.artist} ${item.album}`.toLocaleLowerCase().includes(keyword));
+  }
+
+  function renderSharedPlaylistSongs() {
+    const container = $('sharedPlaylistSongs');
+    const filtered = filteredSharedPlaylistSongs();
+    const selected = new Set(state.selected.map(selectedKey));
+    const selectedInPlaylist = state.sharedPlaylistSongs.filter(item => selected.has(selectedKey(item))).length;
+    $('sharedPlaylistMeta').textContent = `已加载 ${state.sharedPlaylistSongs.length}${state.sharedPlaylistTotal > state.sharedPlaylistSongs.length ? ` / ${state.sharedPlaylistTotal}` : ''} 首 · 已选择 ${selectedInPlaylist} 首 · ${platformNames[state.sharedPlaylistSource] || state.sharedPlaylistSource}`;
+    $('selectAllSharedPlaylist').textContent = filtered.length && filtered.every(({ item }) => selected.has(selectedKey(item))) ? '取消选择当前结果' : '全选当前结果';
+    $('downloadSharedSelection').disabled = selectedInPlaylist === 0;
+    if (!filtered.length) {
+      container.innerHTML = '<div class="empty-state compact-empty"><strong>没有匹配歌曲</strong><p>换一个筛选关键词再试试。</p></div>';
+      return;
+    }
+    container.innerHTML = filtered.map(({ item, index }) => `<article class="shared-playlist-song">
+      <input class="result-check" type="checkbox" data-shared-check="${index}" ${selected.has(selectedKey(item)) ? 'checked' : ''} aria-label="选择 ${escapeHtml(item.title)}">
+      ${coverMarkup(item.cover_url, item.title)}
+      <div class="shared-playlist-song-main"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.artist || '未知歌手')} · ${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)}</span></div>
+      <span class="badge primary-badge">${escapeHtml(platformNames[state.sharedPlaylistSource] || state.sharedPlaylistSource)}</span>
+    </article>`).join('');
+    container.querySelectorAll('[data-shared-check]').forEach(input => input.addEventListener('change', event => {
+      const item = state.sharedPlaylistSongs[Number(event.target.dataset.sharedCheck)];
+      const key = selectedKey(item);
+      if (event.target.checked && !state.selected.some(entry => selectedKey(entry) === key)) state.selected.push(item);
+      if (!event.target.checked) state.selected = state.selected.filter(entry => selectedKey(entry) !== key);
+      localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
+      renderSharedPlaylistSongs();
+      renderImport();
+      renderResults();
+    }));
+  }
+
+  async function parseSharedPlaylist() {
+    const value = $('sharedPlaylistUrl').value.trim();
+    if (!value) return toast('请粘贴歌单分享链接');
+    const button = $('parseSharedPlaylist');
+    setBusy(button, true, '解析中');
+    $('sharedPlaylistState').textContent = '正在识别平台并加载完整歌单，请稍候…';
+    $('sharedPlaylistResult').classList.add('hidden');
+    try {
+      const resp = await request('/api/songlist/shared', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: value }),
+      });
+      const source = String(resp.data?.source || '');
+      const songs = Array.isArray(resp.data?.list) ? resp.data.list : [];
+      state.sharedPlaylistSource = source;
+      state.sharedPlaylistTitle = String(resp.data?.name || '分享歌单');
+      state.sharedPlaylistTotal = Number(resp.data?.total || songs.length);
+      state.sharedPlaylistSongs = songs.map(song => normalizeBrowseSong(song, source));
+      $('sharedPlaylistTitle').textContent = state.sharedPlaylistTitle;
+      $('sharedPlaylistCover').innerHTML = resp.data?.img ? `<img src="${escapeHtml(resp.data.img)}" alt="">` : '♫';
+      $('sharedPlaylistSearch').value = '';
+      $('sharedPlaylistResult').classList.remove('hidden');
+      $('sharedPlaylistState').textContent = resp.data?.truncated
+        ? `歌单共有 ${state.sharedPlaylistTotal} 首，本次已加载前 ${state.sharedPlaylistSongs.length} 首。`
+        : `歌单解析成功，共加载 ${state.sharedPlaylistSongs.length} 首歌曲。`;
+      if (!$('playlistName').value) $('playlistName').value = state.sharedPlaylistTitle;
+      renderSharedPlaylistSongs();
+    } catch (error) {
+      state.sharedPlaylistSongs = [];
+      $('sharedPlaylistState').textContent = `解析失败：${error.message}`;
+      toast(error.message, 5200);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  $('sharedPlaylistForm').addEventListener('submit', event => { event.preventDefault(); parseSharedPlaylist(); });
+  $('sharedPlaylistSearch').addEventListener('input', renderSharedPlaylistSongs);
+  $('selectAllSharedPlaylist').addEventListener('click', () => {
+    const filtered = filteredSharedPlaylistSongs();
+    const current = new Set(state.selected.map(selectedKey));
+    const allSelected = filtered.length && filtered.every(({ item }) => current.has(selectedKey(item)));
+    const filteredKeys = new Set(filtered.map(({ item }) => selectedKey(item)));
+    if (allSelected) state.selected = state.selected.filter(item => !filteredKeys.has(selectedKey(item)));
+    else filtered.forEach(({ item }) => { if (!state.selected.some(entry => selectedKey(entry) === selectedKey(item))) state.selected.push(item); });
+    localStorage.setItem('neo-lxbridge:selected', JSON.stringify(state.selected));
+    renderSharedPlaylistSongs();
+    renderImport();
+    renderResults();
+  });
+  $('downloadSharedSelection').addEventListener('click', () => $('batchDownloadButton').click());
 
   function formatPlayCount(value) {
     const count = Number(value || 0);
@@ -727,6 +892,8 @@
         }),
       });
       state.results = resp.results || [];
+      setSearchDiscoveryExpanded(false);
+      saveHistoryKeyword(keyword);
       renderResults();
     } catch (error) {
       state.results = [];
@@ -739,6 +906,16 @@
   $('platform').addEventListener('change', () => renderQualityOptions($('quality').value));
   $('searchButton').addEventListener('click', search);
   $('keyword').addEventListener('keydown', event => { if (event.key === 'Enter') search(); });
+  $('toggleSearchDiscovery').addEventListener('click', () => setSearchDiscoveryExpanded(!state.searchDiscoveryExpanded));
+  $('clearSearchHistory').addEventListener('click', async () => {
+    if (!confirm('确定清空全部搜索历史吗？')) return;
+    try {
+      const resp = await request('/api/search/history?all=true', { method: 'DELETE' });
+      state.searchHistory = Array.isArray(resp.data?.history) ? resp.data.history : [];
+      renderSearchDiscovery();
+      toast('搜索历史已清空');
+    } catch (error) { toast(error.message, 4200); }
+  });
 
   function playlistOptionsMarkup(selectedValue = '') {
     const base = [
@@ -1616,28 +1793,16 @@
         probe = await probeDownload(item, allowDowngrade);
       } catch (error) {
         if (behavior.requireProbe) throw new Error(`高音质探测失败，安全洗版已停止：${error.message}`);
-        const proceed = behavior.skipConfirm || state.downloadSettings.ask_each_time
-          ? true
-          : window.confirm(`无法提前获取《${item.title}》的文件大小：${error.message}\n\n是否仍要继续下载？`);
-        if (!proceed) return;
+        if (!behavior.skipConfirm) toast(`未能提前探测《${item.title}》的文件信息，仍可在确认目录后继续下载：${error.message}`, 5200);
       }
       let downloadOptions = behavior.downloadOptions || currentDownloadOptions();
       if (probe) {
         const actualQuality = probe.actual_quality || probe.requestedQuality;
-        const sizeLine = probe.total_bytes == null ? '大小未知' : formatBytes(probe.total_bytes);
-        const typeLine = probe.content_type ? `\n格式：${probe.content_type}` : '';
-        const probeLine = probe.probe_error ? `\n探测说明：${probe.probe_error}` : '';
-        const proceed = behavior.skipConfirm || state.downloadSettings.ask_each_time
-          ? true
-          : window.confirm(
-          `确认下载《${item.title}》？\n\n请求音质：${probe.requestedQuality}\n实际音质：${actualQuality}${probe.downgraded ? '（已自动降级）' : ''}\n文件大小：${sizeLine}${typeLine}${probeLine}`,
-        );
-        if (!proceed) return;
         item.source_data.requested_quality = probe.requestedQuality;
         item.source_data.quality = actualQuality;
         item.source_data.allow_downgrade = allowDowngrade;
       }
-      if (!behavior.downloadOptions && state.downloadSettings.ask_each_time) {
+      if (!behavior.downloadOptions) {
         downloadOptions = await openDownloadModal({ item, probe });
         if (!downloadOptions) return;
       }
@@ -2094,7 +2259,6 @@ curl -X POST "${endpoint}" \
       target_dir_input: $('downloadTargetDir').value.trim(),
       create_artist_folder: $('downloadCreateArtistFolder').checked,
       filename_order: $('downloadFilenameOrder').value,
-      ask_each_time: $('downloadAskEachTime').checked,
       favorite_dirs: state.downloadSettings.favorite_dirs || [],
       ...overrides,
     };
@@ -2157,7 +2321,6 @@ curl -X POST "${endpoint}" \
       $('downloadTargetDir').value = String(resp.data?.target_dir_input || '');
       $('downloadCreateArtistFolder').checked = Boolean(resp.data?.create_artist_folder);
       $('downloadFilenameOrder').value = resp.data?.filename_order || 'title_artist';
-      $('downloadAskEachTime').checked = Boolean(resp.data?.ask_each_time);
       $('downloadProtectionEnabled').checked = resp.data?.enabled !== false;
       $('downloadIntervalSeconds').value = String(Math.round(Number(resp.data?.download_interval_ms || 5000) / 1000));
       $('playbackIntervalSeconds').value = String(Math.round(Number(resp.data?.playback_interval_ms || 2000) / 1000));
@@ -2334,5 +2497,6 @@ curl -X POST "${endpoint}" \
   loadLxSyncSettings();
   loadDownloads();
   loadDownloadSettings();
+  loadSearchDiscovery();
   updateExternalExample(defaultQuality());
 })();

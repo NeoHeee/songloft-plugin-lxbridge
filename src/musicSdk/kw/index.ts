@@ -4,6 +4,21 @@ import { arr, makeMusicInfo, normalizeCover, obj, page, staticSorts } from '../p
 
 const headers = { Referer: 'https://www.kuwo.cn/', 'User-Agent': 'Mozilla/5.0' };
 
+export function parseKuwoPlaylistSearch(body: unknown, pageNo: number, limit: number) {
+  const data = obj(body); const rows = arr(data.abslist);
+  return {
+    source: 'kw' as const, page: pageNo, limit, total: Number(data.TOTAL || data.total || rows.length),
+    list: rows.map(x => { const r = obj(x); return {
+      id: String(r.playlistid || r.DC_TARGETID || r.id || ''),
+      name: String(r.name || r.title || ''),
+      img: normalizeCover(r.pic || r.hts_pic),
+      playCount: Number(r.playcnt || r.playCount || 0),
+      creator: String(r.nickname || r.uname || ''),
+      description: String(r.intro || r.info || ''),
+    }; }).filter(x => x.id && x.name),
+  };
+}
+
 function parseSong(raw: Record<string, any>): MusicInfo {
   const id = String(raw.MUSICRID || raw.rid || raw.musicrid || raw.id || '').replace(/^MUSIC_/, '');
   const nInfo = String(raw.N_MINFO || raw.n_minfo || '');
@@ -70,9 +85,10 @@ const kw: MusicPlatform = {
       return { source: 'kw', id, name: data.title || data.name || '', img: normalizeCover(data.pic || data.img), total: Number(data.total || rows.length), page: pageNo, limit, list: rows.map(x => parseSong(obj(x))) };
     },
     async search(keyword, pageNo = 1, limit = 30) {
-      const { body } = await httpFetch(`https://www.kuwo.cn/api/www/search/searchPlayListBykeyWord?key=${encodeURIComponent(keyword)}&pn=${pageNo}&rn=${limit}&httpsStatus=1`, { headers }).promise;
-      const data = obj(obj(body).data || body); const rows=arr(data.list || data.data);
-      return { source:'kw', page:pageNo, limit, total:Number(data.total||rows.length), list:rows.map(x=>{const r=obj(x);return {id:String(r.id||r.pid||r.playlistId||''),name:String(r.name||r.title||r.playlistName||''),img:normalizeCover(r.img||r.pic||r.cover),playCount:Number(r.listencnt||r.playCount||0),creator:String(r.uname||r.creator||''),description:String(r.info||r.description||'')};}).filter(x=>x.id&&x.name) };
+      const url = `https://search.kuwo.cn/r.s?client=kt&all=${encodeURIComponent(keyword)}&pn=${Math.max(0, pageNo - 1)}&rn=${limit}&ft=playlist&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1`;
+      const { body, statusCode } = await httpFetch(url, { headers }).promise;
+      if (statusCode >= 400) throw new Error(`酷我歌单搜索失败: HTTP ${statusCode}`);
+      return parseKuwoPlaylistSearch(body, pageNo, limit);
     },
     async sorts() { return staticSorts('kw'); },
   },
