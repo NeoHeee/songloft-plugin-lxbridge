@@ -2,7 +2,6 @@ export const DOWNLOAD_TARGET_DIR_KEY = 'download_target_dir';
 export const DOWNLOAD_TARGET_DIR_INPUT_KEY = 'download_target_dir_input';
 export const DOWNLOAD_CREATE_ARTIST_FOLDER_KEY = 'download_create_artist_folder';
 export const DOWNLOAD_FILENAME_ORDER_KEY = 'download_filename_order';
-export const DOWNLOAD_ASK_EACH_TIME_KEY = 'download_ask_each_time';
 export const DOWNLOAD_FAVORITE_DIRS_KEY = 'download_favorite_dirs';
 export const DOWNLOAD_PROTECTION_ENABLED_KEY = 'download_protection_enabled';
 export const DOWNLOAD_INTERVAL_MS_KEY = 'download_interval_ms';
@@ -20,7 +19,6 @@ export interface DownloadPathSettings {
   create_artist_folder: boolean;
   filename_order: DownloadFilenameOrder;
   path_template: string;
-  ask_each_time: boolean;
   favorite_dirs: string[];
 }
 
@@ -121,12 +119,11 @@ export function buildDownloadPathTemplate(createArtistFolder: boolean, filenameO
 }
 
 export async function getDownloadPathSettings(): Promise<DownloadPathSettings> {
-  const [storedTargetDir, storedInput, createArtistFolder, filenameOrder, askEachTime, favoriteDirs] = await Promise.all([
+  const [storedTargetDir, storedInput, createArtistFolder, filenameOrder, favoriteDirs] = await Promise.all([
     songloft.persistentStorage.get(DOWNLOAD_TARGET_DIR_KEY),
     songloft.persistentStorage.get(DOWNLOAD_TARGET_DIR_INPUT_KEY),
     songloft.persistentStorage.get(DOWNLOAD_CREATE_ARTIST_FOLDER_KEY),
     songloft.persistentStorage.get(DOWNLOAD_FILENAME_ORDER_KEY),
-    songloft.persistentStorage.get(DOWNLOAD_ASK_EACH_TIME_KEY),
     songloft.persistentStorage.get(DOWNLOAD_FAVORITE_DIRS_KEY),
   ]);
   const targetDir = normalizeDownloadTargetDir(storedTargetDir);
@@ -141,7 +138,6 @@ export async function getDownloadPathSettings(): Promise<DownloadPathSettings> {
     create_artist_folder: createFolder,
     filename_order: order,
     path_template: buildDownloadPathTemplate(createFolder, order),
-    ask_each_time: normalizeBoolean(askEachTime, false),
     favorite_dirs: normalizeFavoriteDirs(favoriteDirs),
   };
 }
@@ -152,7 +148,6 @@ export async function setDownloadPathSettings(value: Partial<DownloadPathSetting
   const targetDir = value.target_dir_input == null ? current.target_dir : resolveDownloadTargetDir(input);
   const createFolder = normalizeBoolean(value.create_artist_folder, current.create_artist_folder);
   const order = normalizeFilenameOrder(value.filename_order ?? current.filename_order);
-  const askEachTime = normalizeBoolean(value.ask_each_time, current.ask_each_time);
   const favoriteDirs = value.favorite_dirs == null ? current.favorite_dirs : normalizeFavoriteDirs(value.favorite_dirs);
   if (targetDir) {
     await Promise.all([
@@ -168,7 +163,6 @@ export async function setDownloadPathSettings(value: Partial<DownloadPathSetting
   await Promise.all([
     songloft.persistentStorage.set(DOWNLOAD_CREATE_ARTIST_FOLDER_KEY, createFolder),
     songloft.persistentStorage.set(DOWNLOAD_FILENAME_ORDER_KEY, order),
-    songloft.persistentStorage.set(DOWNLOAD_ASK_EACH_TIME_KEY, askEachTime),
     songloft.persistentStorage.set(DOWNLOAD_FAVORITE_DIRS_KEY, favoriteDirs),
   ]);
   return {
@@ -177,7 +171,6 @@ export async function setDownloadPathSettings(value: Partial<DownloadPathSetting
     create_artist_folder: createFolder,
     filename_order: order,
     path_template: buildDownloadPathTemplate(createFolder, order),
-    ask_each_time: askEachTime,
     favorite_dirs: favoriteDirs,
   };
 }

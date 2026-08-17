@@ -11,6 +11,7 @@ export interface HttpFetchResult {
   statusCode: number;
   headers: Record<string, string>;
   body: unknown;
+  finalUrl?: string;
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
@@ -83,6 +84,7 @@ export function httpFetch(url: string, options: HttpFetchOptions = {}): { promis
         statusCode: response.status,
         headers: responseHeaders,
         body: parseBody(text, responseHeaders['content-type'] || ''),
+        finalUrl: response.url || url,
       };
     } finally {
       clearTimeout(timer);

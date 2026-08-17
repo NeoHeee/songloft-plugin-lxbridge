@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-          <span class="version-badge">v1.1.0</span>
+          <span class="version-badge">v1.1.2</span>
             </div>
             <p>开放音源桥接 · 私人音乐管理</p>
           </div>
@@ -175,6 +175,31 @@
               <span>搜索</span>
             </button>
           </div>
+
+          <div id="searchDiscovery" class="search-discovery">
+            <button id="toggleSearchDiscovery" class="search-discovery-toggle" type="button" aria-expanded="true">
+              <span>搜索推荐</span>
+              <span id="searchDiscoveryToggleLabel">收起</span>
+            </button>
+            <div class="search-discovery-content">
+              <section class="search-suggestion-group" aria-labelledby="hotSearchHeading">
+                <div class="search-suggestion-heading">
+                  <div>
+                    <strong id="hotSearchHeading">热门搜索</strong>
+                    <span id="hotSearchSource">实时推荐</span>
+                  </div>
+                </div>
+                <div id="hotSearchList" class="search-chip-list"><span class="search-suggestion-empty">正在加载热门搜索…</span></div>
+              </section>
+              <section id="searchHistorySection" class="search-suggestion-group hidden" aria-labelledby="searchHistoryHeading">
+                <div class="search-suggestion-heading">
+                  <strong id="searchHistoryHeading">搜索历史</strong>
+                  <button id="clearSearchHistory" class="text-button search-clear-history" type="button">清空</button>
+                </div>
+                <div id="searchHistoryList" class="search-chip-list"></div>
+              </section>
+            </div>
+          </div>
         </div>
 
         <div class="list-toolbar">
@@ -243,12 +268,47 @@
       </section>
 
       <section id="tab-import" class="panel">
+        <div class="card shared-playlist-card">
+          <div class="section-heading">
+            <span class="section-kicker">分享歌单</span>
+            <h2>从分享链接选择歌曲</h2>
+            <p class="muted">支持酷我、酷狗、QQ 音乐、网易云和咪咕的公开歌单。解析后不会自动下载，可先搜索并勾选歌曲。</p>
+          </div>
+          <form id="sharedPlaylistForm" class="shared-playlist-form">
+            <div class="field grow">
+              <label for="sharedPlaylistUrl">歌单分享链接</label>
+              <input id="sharedPlaylistUrl" type="text" inputmode="url" placeholder="粘贴歌单分享链接或包含链接的分享文字" autocomplete="off">
+            </div>
+            <button id="parseSharedPlaylist" class="primary" type="submit">解析歌单</button>
+          </form>
+          <p id="sharedPlaylistState" class="muted shared-playlist-state">仅支持公开歌单；私人或需要登录的歌单可能无法读取。</p>
+
+          <div id="sharedPlaylistResult" class="shared-playlist-result hidden">
+            <div class="shared-playlist-summary">
+              <div id="sharedPlaylistCover" class="shared-playlist-cover">♫</div>
+              <div class="shared-playlist-copy">
+                <strong id="sharedPlaylistTitle">分享歌单</strong>
+                <span id="sharedPlaylistMeta" class="muted"></span>
+              </div>
+            </div>
+            <div class="shared-playlist-toolbar">
+              <div class="field grow">
+                <label for="sharedPlaylistSearch">筛选歌曲</label>
+                <input id="sharedPlaylistSearch" type="search" placeholder="搜索歌名或歌手">
+              </div>
+              <button id="selectAllSharedPlaylist" class="secondary" type="button">全选当前结果</button>
+              <button id="downloadSharedSelection" class="primary" type="button">下载已选歌曲</button>
+            </div>
+            <div id="sharedPlaylistSongs" class="shared-playlist-songs"></div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="section-heading row between">
             <div>
               <span class="section-kicker">写入音乐库</span>
               <h2>待导入歌曲</h2>
-              <p class="muted">在搜索结果中勾选歌曲后，会出现在这里。</p>
+              <p class="muted">在搜索结果、发现页或分享歌单中勾选歌曲后，会出现在这里。</p>
             </div>
             <button id="clearSelection" class="text-button" type="button">清空选择</button>
           </div>
@@ -639,11 +699,6 @@
                   <option value="artist_title">歌手名-歌曲名</option>
                 </select>
               </div>
-              <label class="check-card">
-                <input id="downloadAskEachTime" type="checkbox">
-                <span class="check-mark"></span>
-                <span><strong>每次下载前询问目录</strong><small>开启后单曲下载会显示目录确认窗口；批量下载只询问一次。</small></span>
-              </label>
             </div>
             <div class="download-favorites">
               <div class="field grow">
