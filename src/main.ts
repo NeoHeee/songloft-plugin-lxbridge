@@ -193,6 +193,7 @@ router.post('/api/direct/music/url', directApi.musicUrl);
 router.post('/api/direct/music/probe', directApi.musicProbe);
 router.get('/api/direct/lyric', directApi.lyric);
 router.post('/api/search/topone', directApi.topone);
+router.post('/api/search/best', directApi.best);
 
 // 便于外部插件查询当前支持的平台，不经过 UI 响应封装。
 router.get('/api/platforms', async () => jsonResponse({ sources, capabilities: Object.fromEntries(sources.map(item => [item.id, {

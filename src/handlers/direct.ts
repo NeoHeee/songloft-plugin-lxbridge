@@ -3,7 +3,7 @@ import { parseQuery } from '@songloft/plugin-sdk';
 import type { MusicInfo, PlatformId } from '../types';
 import { musicSdk } from '../musicSdk/facade';
 import type { RuntimeManager } from '../engine/manager';
-import { matchScore, searchAcross } from './search';
+import { firstExternalCandidate, matchScore, resolveExternalItem, searchAcross, searchExternalCandidates } from './search';
 import { parseJSONBody } from './request';
 import { errorMessage, fail, ok } from './response';
 
@@ -167,6 +167,23 @@ export function directHandlers(runtimeManager: RuntimeManager) {
           } catch (error) { errors.push(errorMessage(error)); }
         }
         throw new Error(errors[0] || '没有找到可播放结果');
+      } catch (error) { return fail(errorMessage(error), 404); }
+    },
+
+    best: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const body = parseJSONBody<Record<string, any>>(req);
+        const keyword = String(body.keyword || `${body.title || ''} ${body.artist || ''}`).trim();
+        const quality = String(body.quality || '320k');
+        const sourceId = String(body.source_id || 'all');
+        const allowDowngrade = body.allow_downgrade !== false;
+        if (!keyword) throw new Error('keyword/title is required');
+        const candidates = await searchExternalCandidates({ keyword, quality, source_id: sourceId, limit: 1, page: 1 });
+        const first = firstExternalCandidate(candidates);
+        if (!first) throw new Error('未找到匹配歌曲');
+        const resolved = await resolveExternalItem(runtimeManager, first, allowDowngrade);
+        if (!resolved.url) throw new Error(String(resolved.error || '第一条结果无法解析播放地址'));
+        return ok(resolved);
       } catch (error) { return fail(errorMessage(error), 404); }
     },
   };

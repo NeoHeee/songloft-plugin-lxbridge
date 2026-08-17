@@ -125,13 +125,13 @@ export function createMusicUrlRoute(runtimeManager: RuntimeManager): (req: HTTPR
   };
 }
 
-interface ExternalSearchHint {
+export interface ExternalSearchHint {
   title?: string;
   artist?: string;
   duration?: number;
 }
 
-interface ExternalSearchRequest {
+export interface ExternalSearchRequest {
   keyword?: string;
   source_id?: string;
   quality?: string;
@@ -139,6 +139,7 @@ interface ExternalSearchRequest {
   page_size?: number;
   page?: number;
   hint?: ExternalSearchHint;
+  allow_downgrade?: boolean;
 }
 
 function normalizeLimit(value: unknown, fallback = 10): number {
@@ -151,7 +152,7 @@ function describeError(error: unknown): string {
   return String((error as Error)?.message || error || 'unknown error');
 }
 
-async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchResultItem): Promise<Record<string, unknown>> {
+export async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchResultItem, allowDowngrade = true): Promise<Record<string, unknown>> {
   const sourceData = item.source_data || {};
   const platform = String(sourceData.platform || '');
   const quality = String(sourceData.quality || '320k');
@@ -168,7 +169,7 @@ async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchR
     error = `平台 ${platform} 尚未启用可用音源`;
   } else {
     try {
-      const resolved = await runtimeManager.getMusicUrl(platform, songInfo, quality);
+      const resolved = await runtimeManager.getMusicUrl(platform, songInfo, quality, allowDowngrade);
       if (typeof resolved === 'string') {
         url = resolved;
       } else {
@@ -178,6 +179,7 @@ async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchR
       actualQuality = resolved.actualQuality || quality;
       downgraded = Boolean(resolved.downgraded);
       sourceData.quality = actualQuality;
+      sourceData.allow_downgrade = allowDowngrade;
     } catch (err) {
       error = describeError(err);
     }
@@ -202,39 +204,44 @@ async function resolveExternalItem(runtimeManager: RuntimeManager, item: SearchR
   };
 }
 
+export async function searchExternalCandidates(body: ExternalSearchRequest): Promise<SearchResultItem[]> {
+  const hint = body.hint || {};
+  const keyword = String(body.keyword || '').trim() || `${hint.title || ''} ${hint.artist || ''}`.trim();
+  if (!keyword) throw new Error('keyword is required');
+
+  const sourceId = String(body.source_id || 'all');
+  const quality = String(body.quality || '320k');
+  const page = Number(body.page || 1) || 1;
+  const pageSize = normalizeLimit(body.page_size ?? body.limit, 12);
+  let candidates: SearchResultItem[];
+  if (sourceId === 'all') {
+    candidates = await searchAcross(keyword, page, pageSize, quality);
+  } else {
+    if (!isPlatform(sourceId)) throw new Error(`unsupported source_id: ${sourceId}`);
+    candidates = await searchOne(sourceId, keyword, page, pageSize, quality);
+  }
+  if (hint.title || hint.artist) {
+    const hintTitle = String(hint.title || keyword);
+    const hintArtist = String(hint.artist || '');
+    const hintDuration = hint.duration == null ? undefined : Number(hint.duration);
+    candidates.sort((a, b) => matchScore(b, hintTitle, hintArtist, hintDuration) - matchScore(a, hintTitle, hintArtist, hintDuration));
+  }
+  return candidates.slice(0, pageSize);
+}
+
+export function firstExternalCandidate(candidates: SearchResultItem[]): SearchResultItem | null {
+  return candidates[0] || null;
+}
+
 export function createExternalSearchRoute(runtimeManager: RuntimeManager): (req: HTTPRequest) => Promise<HTTPResponse> {
   return async (req: HTTPRequest): Promise<HTTPResponse> => {
     try {
       const body = parseJSONBody<ExternalSearchRequest>(req);
-      const hint = body.hint || {};
-      const keyword = String(body.keyword || '').trim() || `${hint.title || ''} ${hint.artist || ''}`.trim();
-      if (!keyword) return jsonResponse({ code: 400, msg: 'keyword is required', data: [] }, 400);
-
-      const sourceId = String(body.source_id || 'all');
-      const quality = String(body.quality || '320k');
-      const page = Number(body.page || 1) || 1;
-      const pageSize = normalizeLimit(body.page_size ?? body.limit, 12);
-
-      let candidates: SearchResultItem[] = [];
-      if (sourceId === 'all') {
-        candidates = await searchAcross(keyword, page, pageSize, quality);
-      } else {
-        if (!isPlatform(sourceId)) return jsonResponse({ code: 400, msg: `unsupported source_id: ${sourceId}`, data: [] }, 400);
-        candidates = await searchOne(sourceId, keyword, page, pageSize, quality);
-      }
-
-      if (hint.title || hint.artist) {
-        const hintTitle = String(hint.title || keyword);
-        const hintArtist = String(hint.artist || '');
-        const hintDuration = hint.duration == null ? undefined : Number(hint.duration);
-        candidates.sort((a, b) => matchScore(b, hintTitle, hintArtist, hintDuration) - matchScore(a, hintTitle, hintArtist, hintDuration));
-      }
-
-      const limited = candidates.slice(0, pageSize);
+      const limited = await searchExternalCandidates(body);
       if (!limited.length) {
         return jsonResponse({ code: 404, msg: '未找到匹配歌曲', data: [] }, 404);
       }
-      const data = await Promise.all(limited.map(item => resolveExternalItem(runtimeManager, item)));
+      const data = await Promise.all(limited.map(item => resolveExternalItem(runtimeManager, item, body.allow_downgrade !== false)));
       return jsonResponse({ code: 0, msg: 'success', data });
     } catch (error) {
       return jsonResponse({ code: 500, msg: describeError(error), data: [] }, 500);

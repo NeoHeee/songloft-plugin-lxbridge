@@ -4,6 +4,14 @@ Songloft LxBridge（中文名：Songloft 洛雪音源桥）把洛雪自定义音
 
 > v0.5.0 起插件永久内部标识为 `neo-lxbridge`。后续版本即使更改显示名称，也不再更改该标识。
 
+## v1.1.3
+
+发布版本：`v1.1.3`。
+
+- 保留现有 `/api/search/topone` 匹配分重排逻辑；
+- 新增 `/api/search/best`，直接复用 `/external/search` 的原始搜索顺序，固定取第一条并解析播放地址；
+- 设置页新增 Best 接口地址、复制按钮与用途说明。
+
 ## v1.1.2
 
 发布版本：`v1.1.2`。
@@ -262,16 +270,16 @@ https://github.com/NeoHeee/songloft-plugin-lxbridge/blob/main/registry.json
 
 从 [Releases](https://github.com/NeoHeee/songloft-plugin-lxbridge/releases/latest) 下载：
 
-- `neo-lxbridge-v1.1.2.jsplugin.zip`：安装包
-- `neo-lxbridge-v1.1.2.jsplugin.zip.sha256`：SHA-256
-- `songloft-plugin-neo-lxbridge-v1.1.2-source.zip`：源码归档
+- `neo-lxbridge-v1.1.3.jsplugin.zip`：安装包
+- `neo-lxbridge-v1.1.3.jsplugin.zip.sha256`：SHA-256
+- `songloft-plugin-neo-lxbridge-v1.1.3-source.zip`：源码归档
 
-在 Songloft 插件管理页面上传 `neo-lxbridge-v1.1.2.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
+在 Songloft 插件管理页面上传 `neo-lxbridge-v1.1.3.jsplugin.zip`。不要解压安装包，也不要上传源码归档。
 
 可选：下载 `.sha256` 文件并校验安装包完整性。在 Windows PowerShell 中运行：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v1.1.2.jsplugin.zip
+Get-FileHash -Algorithm SHA256 .\neo-lxbridge-v1.1.3.jsplugin.zip
 ```
 
 命令输出应与 `.sha256` 文件中的值一致。
@@ -338,10 +346,11 @@ dist/neo-lxbridge.jsplugin.zip
 - `POST /api/direct/music/url`
 - `GET /api/direct/lyric`
 - `POST /api/search/topone`
+- `POST /api/search/best`
 
 所有路径均位于前缀 `/api/v1/jsplugin/neo-lxbridge` 下。
 
-其中 `/external/search` 用于返回多条标准化搜索结果；`/api/search/topone` 按 topone 规范只返回匹配度最高的一首歌曲，供 Songloft 智能音箱插件的外部搜索功能使用。LxBridge 会通过插件间通信自动注册为候选搜索源，在支持该协议的新版智能音箱插件中可直接从“快速选择”选择 `Songloft LxBridge`，无需手动填写接口地址。
+其中 `/external/search` 用于返回多条标准化搜索结果；`/api/search/topone` 保留按匹配分重排并返回最高分歌曲的原有行为；`/api/search/best` 复用 `/external/search` 的原始搜索顺序，固定取第一条结果并解析播放地址，不执行 `matchScore` 二次排序。LxBridge 会通过插件间通信自动注册为候选搜索源，在支持该协议的新版智能音箱插件中可直接从“快速选择”选择 `Songloft LxBridge`，无需手动填写接口地址。
 
 ## 构建
 
@@ -358,7 +367,7 @@ npm run validate
 dist/neo-lxbridge.jsplugin.zip
 ```
 
-构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v1.1.2.jsplugin.zip`。
+构建器按入口 `neo-lxbridge` 生成内部包名；Release 会将其发布为 `neo-lxbridge-v1.1.3.jsplugin.zip`。
 
 ## 安全与免责声明
 
