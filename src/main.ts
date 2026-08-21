@@ -147,7 +147,7 @@ router.get('/api/settings/playback', async () => jsonResponse({
 }));
 router.put('/api/settings/playback', async (req) => {
   try {
-    const body = parseJSONBody<{ default_quality?: string; allow_auto_downgrade?: boolean }>(req);
+    const body = parseJSONBody<{ default_quality?: string; allow_auto_downgrade?: boolean; show_compatibility_notice?: boolean }>(req);
     return jsonResponse({ code: 0, msg: 'success', data: await setPlaybackSettings(body) });
   } catch (error) {
     return jsonResponse({ code: 400, msg: String((error as Error)?.message || error), data: null }, 400);

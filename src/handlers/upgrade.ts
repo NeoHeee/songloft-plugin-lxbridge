@@ -12,6 +12,8 @@ interface UpgradeMatchRequest {
 
 interface ProbeCacheItem {
   file_path: string;
+  resolved_path?: string;
+  file_size?: number;
   bitrate_kbps: number;
   format: string;
   codec: string;
@@ -70,7 +72,7 @@ function localSongView(song: Song, cache: Record<string, ProbeCacheItem> = {}) {
     bit_rate: Number(song.bit_rate || 0),
     bitrate_kbps: effectiveBitrateKbps(song, cache),
     bitrate_source: bitrateKbps(song) > 0 ? 'library' : (probed?.bitrate_kbps ? (probed.source || 'ffprobe') : 'unknown'),
-    file_size: Number(song.file_size || 0),
+    file_size: Number(song.file_size || probed?.file_size || 0),
     file_path: song.file_path,
     cover_url: song.cover_url,
   };
@@ -116,23 +118,92 @@ function parsePositiveNumber(value: unknown): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+export function buildAudioPathCandidates(value: unknown): string[] {
+  let storedPath = String(value || '').replace(/\\/g, '/').trim();
+  try { storedPath = decodeURIComponent(storedPath); } catch { /* keep the stored path */ }
+  storedPath = storedPath.replace(/\/{2,}/g, '/').replace(/^\.\//, '');
+  const candidates: string[] = [];
+  const add = (path: string) => { if (path && !candidates.includes(path)) candidates.push(path); };
+
+  if (/^\/app\/music\//i.test(storedPath)) {
+    const relative = storedPath.slice('/app/music/'.length);
+    add(storedPath);
+    add(`/music/${relative}`);
+    if (/^music\//i.test(relative)) add(`/app/music/${relative.slice('music/'.length)}`);
+  } else if (/^\/music\//i.test(storedPath)) {
+    const relative = storedPath.slice('/music/'.length);
+    add(`/app/music/${relative}`);
+    add(storedPath);
+  } else if (/^music\//i.test(storedPath)) {
+    const relative = storedPath.slice('music/'.length);
+    add(`/app/music/${relative}`);
+    add(`/music/${relative}`);
+  } else if (/^app\/music\//i.test(storedPath)) {
+    add(`/${storedPath}`);
+  } else if (storedPath && !storedPath.startsWith('/')) {
+    add(`/app/music/${storedPath}`);
+  }
+  add(storedPath);
+  return candidates;
+}
+
+async function statFileSize(path: string): Promise<number> {
+  try {
+    const result = await songloft.command.exec('stat', ['-c', '%s', path], { timeout: 5000 });
+    return result.exitCode === 0 ? parsePositiveNumber(result.stdout.trim()) : 0;
+  } catch { return 0; }
+}
+
+function pathSuffixScore(reference: string, candidate: string): number {
+  const left = reference.toLowerCase().split('/').filter(Boolean).reverse();
+  const right = candidate.toLowerCase().split('/').filter(Boolean).reverse();
+  let score = 0;
+  while (score < left.length && score < right.length && left[score] === right[score]) score += 1;
+  return score;
+}
+
+async function discoverAudioPaths(storedPath: string): Promise<string[]> {
+  const filename = storedPath.replace(/\\/g, '/').split('/').pop()?.trim();
+  if (!filename) return [];
+  const found: string[] = [];
+  for (const root of ['/app/music', '/music']) {
+    try {
+      const result = await songloft.command.exec('find', [root, '-type', 'f', '-name', filename, '-print'], { timeout: 12000 });
+      if (result.exitCode !== 0) continue;
+      result.stdout.split(/\r?\n/).map(path => path.trim()).filter(Boolean).forEach(path => {
+        if (!found.includes(path)) found.push(path);
+      });
+    } catch { /* try the next music root */ }
+  }
+  return found.sort((a, b) => pathSuffixScore(storedPath, b) - pathSuffixScore(storedPath, a)).slice(0, 8);
+}
+
+async function existingAudioPathCandidates(storedPath: string): Promise<Array<{ path: string; size: number }>> {
+  const candidates = buildAudioPathCandidates(storedPath);
+  const existing: Array<{ path: string; size: number }> = [];
+  for (const path of candidates) {
+    const size = await statFileSize(path);
+    if (size > 0) existing.push({ path, size });
+  }
+  if (existing.length) return existing;
+  for (const path of await discoverAudioPaths(storedPath)) {
+    const size = await statFileSize(path);
+    if (size > 0) existing.push({ path, size });
+  }
+  return existing;
+}
+
 async function probeSong(song: Song): Promise<ProbeCacheItem> {
   const originalPath = String(song.file_path || '');
-  const storedPath = originalPath.replace(/\\/g, '/').trim();
-  const candidates: string[] = [];
-  const addCandidate = (value: string) => { if (value && !candidates.includes(value)) candidates.push(value); };
-  if (/^music\//i.test(storedPath)) addCandidate(`/app/${storedPath}`);
-  else if (/^\/music\//i.test(storedPath)) addCandidate(`/app${storedPath}`);
-  else if (/^app\/music\//i.test(storedPath)) addCandidate(`/${storedPath}`);
-  else if (!storedPath.startsWith('/')) addCandidate(`/app/music/${storedPath}`);
-  addCandidate(storedPath);
+  const existing = await existingAudioPathCandidates(originalPath);
+  const candidates = existing.length ? existing.map(item => item.path) : buildAudioPathCandidates(originalPath);
 
   const errors: string[] = [];
   for (const probePath of candidates) {
     try {
       const result = await songloft.command.exec('ffprobe', [
         '-v', 'error', '-select_streams', 'a:0',
-        '-show_entries', 'stream=bit_rate,codec_name,sample_rate,bits_per_raw_sample,bits_per_sample:format=bit_rate,format_name,duration',
+        '-show_entries', 'stream=bit_rate,codec_name,sample_rate,bits_per_raw_sample,bits_per_sample:format=bit_rate,format_name,duration,size',
         '-of', 'json', probePath,
       ], { timeout: 15000 });
       if (result.exitCode !== 0) throw new Error(result.stderr.trim() || `退出码 ${result.exitCode}`);
@@ -142,19 +213,26 @@ async function probeSong(song: Song): Promise<ProbeCacheItem> {
       };
       const stream = parsed.streams?.[0] || {};
       const format = parsed.format || {};
-      const bitrate = parsePositiveNumber(stream.bit_rate) || parsePositiveNumber(format.bit_rate);
+      const duration = parsePositiveNumber(format.duration) || parsePositiveNumber(song.duration);
+      const fileSize = parsePositiveNumber(format.size)
+        || existing.find(item => item.path === probePath)?.size
+        || parsePositiveNumber(song.file_size);
+      const directBitrate = parsePositiveNumber(stream.bit_rate) || parsePositiveNumber(format.bit_rate);
+      const bitrate = directBitrate || (fileSize && duration ? (fileSize * 8) / duration : 0);
       if (!bitrate) throw new Error('音频文件未提供可识别的码率');
       const bitDepth = parsePositiveNumber(stream.bits_per_raw_sample) || parsePositiveNumber(stream.bits_per_sample);
       return {
         file_path: originalPath,
+        resolved_path: probePath,
+        file_size: fileSize,
         bitrate_kbps: Math.round(bitrate / 1000),
         format: String(format.format_name || song.format || '').split(',')[0].toLowerCase(),
         codec: String(stream.codec_name || ''),
         sample_rate: parsePositiveNumber(stream.sample_rate),
         bit_depth: bitDepth,
-        duration: parsePositiveNumber(format.duration),
+        duration,
         probed_at: new Date().toISOString(),
-        source: 'ffprobe',
+        source: directBitrate ? 'ffprobe' : 'estimated',
       };
     } catch (error) {
       errors.push(`${probePath}: ${errorMessage(error)}`);
@@ -171,6 +249,7 @@ function estimateSongBitrate(song: Song): ProbeCacheItem | null {
   if (bitrate <= 0) return null;
   return {
     file_path: String(song.file_path || ''),
+    file_size: fileSize,
     bitrate_kbps: bitrate,
     format: String(song.format || '').toLowerCase(),
     codec: '', sample_rate: 0, bit_depth: 0, duration,
@@ -185,7 +264,12 @@ async function probeSongWithFallback(song: Song): Promise<ProbeCacheItem> {
   } catch (error) {
     const estimated = estimateSongBitrate(song);
     if (estimated) return estimated;
-    throw error;
+    const resolved = (await existingAudioPathCandidates(String(song.file_path || '')))[0];
+    if (resolved) {
+      const fromFile = estimateSongBitrate({ ...song, file_size: resolved.size } as Song);
+      if (fromFile) return { ...fromFile, resolved_path: resolved.path, file_size: resolved.size };
+    }
+    throw new Error(`${errorMessage(error)}；未能从音乐目录找到可读取文件或有效文件大小`);
   }
 }
 

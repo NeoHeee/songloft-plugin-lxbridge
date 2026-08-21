@@ -26,15 +26,17 @@
       filename_order: 'title_artist', favorite_dirs: [],
     },
     playbackSettings: {
-      default_quality: '320k', allow_auto_downgrade: true, configured: false,
+      default_quality: '320k', allow_auto_downgrade: true, show_compatibility_notice: true, configured: false,
     },
+    compatibilityNoticeShown: false,
     lxSyncSettings: null,
     discoveredDownloadDirs: [],
     downloadModalResolve: null,
     upgradeSongs: [],
+    upgradeScanned: false,
     upgradeUnknownSongs: [],
     upgradeUnknownTotal: 0,
-    upgradeUnknownExpanded: false,
+    upgradeUnknownExpanded: true,
     upgradeCandidates: {},
     upgradeSelected: new Set(),
     upgradeSearch: '',
@@ -80,6 +82,10 @@
 
   function allowAutoDowngrade() {
     return state.playbackSettings.allow_auto_downgrade !== false;
+  }
+
+  function showCompatibilityNotice() {
+    return state.playbackSettings.show_compatibility_notice !== false;
   }
 
   function setTheme(mode) {
@@ -1217,9 +1223,20 @@
     return resp.data?.candidates || [];
   }
 
+  function updateUpgradeResultTools() {
+    const hasResults = state.upgradeScanned && state.upgradeSongs.length > 0;
+    $('upgradeResultTools')?.classList.toggle('hidden', !hasResults);
+    const count = $('upgradeSelectedCount');
+    if (count) {
+      count.textContent = `已选择 ${state.upgradeSelected.size} 首`;
+      count.classList.toggle('hidden', !hasResults);
+    }
+  }
+
   function renderUpgradeSongs() {
     const list = $('upgradeSongList');
     if (!list) return;
+    updateUpgradeResultTools();
     if (!state.upgradeSongs.length) {
       list.innerHTML = '<div class="empty-state compact-empty"><strong>没有符合条件的歌曲</strong><p>可以提高扫描码率阈值后重新扫描。</p></div>';
       return;
@@ -1271,6 +1288,7 @@
       const songId = Number(input.dataset.upgradeSelect);
       if (input.checked) state.upgradeSelected.add(songId);
       else state.upgradeSelected.delete(songId);
+      updateUpgradeResultTools();
     }));
     list.querySelectorAll('[data-upgrade-download]').forEach(button => button.addEventListener('click', async () => {
       const songId = Number(button.dataset.upgradeDownload);
@@ -1373,6 +1391,7 @@
       const bitrate = Number($('upgradeMaxBitrate').value || 320);
       const resp = await request(`/api/upgrade/scan?max_bitrate=${encodeURIComponent(bitrate)}&limit=500`);
       state.upgradeSongs = resp.data?.songs || [];
+      state.upgradeScanned = true;
       state.upgradeUnknownSongs = resp.data?.unknown_songs || [];
       state.upgradeUnknownTotal = Number(resp.data?.statistics?.bitrate_unknown || state.upgradeUnknownSongs.length);
       state.upgradeCandidates = {};
@@ -1938,7 +1957,8 @@
       updatePlayerDock(item, playback.url);
       if (resolved.downgraded) {
         toast(`目标音质 ${requestedQuality} 不可用，已自动降级为 ${actualQuality}`, 5200);
-      } else if (playback.proxied) {
+      } else if (playback.proxied && showCompatibilityNotice() && !state.compatibilityNoticeShown) {
+        state.compatibilityNoticeShown = true;
         toast('已通过 Songloft 兼容代理播放，适配 App、HTTP 地址及跨域重定向。', 4200);
       }
       renderResults();
@@ -2458,14 +2478,19 @@ curl -X POST "${endpoint}" \
     }
   });
 
-  async function savePlaybackSettings(value, allowDowngrade) {
+  async function savePlaybackSettings(value, allowDowngrade, compatibilityNotice) {
     const resp = await request('/api/settings/playback', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ default_quality: value, allow_auto_downgrade: allowDowngrade }),
+      body: JSON.stringify({
+        default_quality: value,
+        allow_auto_downgrade: allowDowngrade,
+        show_compatibility_notice: compatibilityNotice,
+      }),
     });
     state.playbackSettings = resp.data;
     $('allowAutoDowngrade').checked = allowAutoDowngrade();
+    $('showCompatibilityNotice').checked = showCompatibilityNotice();
     syncQualityControls(defaultQuality());
     return resp.data;
   }
@@ -2484,12 +2509,13 @@ curl -X POST "${endpoint}" \
       let settings = resp.data;
       if (!settings?.configured) {
         const legacy = legacyPlaybackSettings();
-        settings = await savePlaybackSettings(legacy.quality, legacy.allowDowngrade);
+        settings = await savePlaybackSettings(legacy.quality, legacy.allowDowngrade, true);
         localStorage.removeItem('neo-lxbridge:defaultQuality');
         localStorage.removeItem('neo-lxbridge:allowAutoDowngrade');
       } else {
         state.playbackSettings = settings;
         $('allowAutoDowngrade').checked = allowAutoDowngrade();
+        $('showCompatibilityNotice').checked = showCompatibilityNotice();
         syncQualityControls(defaultQuality());
       }
     } catch (error) {
@@ -2504,8 +2530,8 @@ curl -X POST "${endpoint}" \
     const value = $('defaultQualitySetting').value || defaultQuality();
     setBusy(button, true, '保存中');
     try {
-      await savePlaybackSettings(value, $('allowAutoDowngrade').checked);
-      toast('默认音质已保存');
+      await savePlaybackSettings(value, $('allowAutoDowngrade').checked, $('showCompatibilityNotice').checked);
+      toast('播放设置已保存');
     } catch (error) {
       $('playbackSettingsState').textContent = `保存失败：${error.message}`;
       $('playbackSettingsState').classList.add('is-warning');
@@ -2517,6 +2543,7 @@ curl -X POST "${endpoint}" \
   $('quality').addEventListener('change', () => updateExternalExample($('quality').value));
   $('defaultQualitySetting').addEventListener('change', () => updateExternalExample($('defaultQualitySetting').value));
   $('allowAutoDowngrade').checked = allowAutoDowngrade();
+  $('showCompatibilityNotice').checked = showCompatibilityNotice();
 
   $('downloadFilter').addEventListener('change', renderDownloads);
   $('refreshDownloads').addEventListener('click', loadDownloads);
