@@ -8,6 +8,7 @@ import { getDownloadPathSettings, resolveDownloadPathSettings, type DownloadPath
 import type { RuntimeManager } from '../engine/manager';
 import type { MusicInfo, PlatformId } from '../types';
 import { probeAudio } from './direct';
+import { localAudioFileStatus } from '../download/filesystem';
 
 interface DownloadRequest {
   song?: SearchSongItem;
@@ -30,6 +31,7 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
   status: (req: HTTPRequest) => Promise<HTTPResponse>;
   retry: (req: HTTPRequest) => Promise<HTTPResponse>;
   remove: (req: HTTPRequest) => Promise<HTTPResponse>;
+  queue: (req: HTTPRequest) => Promise<HTTPResponse>;
 } {
   return {
     create: async (req: HTTPRequest): Promise<HTTPResponse> => {
@@ -44,8 +46,13 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
         const record = created[0];
         if (!record?.id) throw new Error('写入 Songloft 歌曲库失败');
 
-        const current = await songloft.songs.getById(record.id);
+        let current = await songloft.songs.getById(record.id);
         if (!current) throw new Error('无法读取已导入的歌曲记录');
+        if (current.type === 'local' && await localAudioFileStatus(current.file_path) === 'missing') {
+          const recovered = await upsertSearchSongs([body.song], body.fetch_lyric !== false, `${upgradeSuffix}:missing-file-recovery:${Date.now()}`);
+          current = recovered[0]?.id ? await songloft.songs.getById(recovered[0].id) : null;
+          if (!current) throw new Error('本地文件已丢失，创建恢复下载记录失败');
+        }
         const pathSettings = await getDownloadPathSettings();
         const selectedSettings = resolveDownloadPathSettings(body.download_options || {}, pathSettings);
         if (body.upgrade_meta?.source_song_id) {
@@ -60,6 +67,7 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
         }
         const job = manager.enqueue(current, {
           ...(body.download_meta || {}),
+          source_id: String(body.song.source_data?.platform || '') || undefined,
           target_dir: selectedSettings.target_dir || undefined,
           path_template: selectedSettings.target_dir ? (body.upgrade_meta?.source_song_id ? '{title}-{artist}' : selectedSettings.path_template) : undefined,
           upgrade_source_song_id: Number(body.upgrade_meta?.source_song_id || 0) || undefined,
@@ -83,6 +91,7 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
           target_dir: selected.target_dir || undefined,
           path_template: selected.target_dir ? selected.path_template : undefined,
           client_key: String((song as SearchSongItem & { _download_client_key?: string })._download_client_key || '') || undefined,
+          source_id: String(song.source_data?.platform || '') || undefined,
         }));
         const requestedQuality = String(body.quality || '320k');
         const allowDowngrade = body.allow_downgrade !== false;
@@ -109,8 +118,13 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
                 const created = await upsertSearchSongs([item], true);
                 const record = created[0];
                 if (!record?.id) throw new Error('写入 Songloft 曲库失败');
-                const current = await songloft.songs.getById(record.id);
+                let current = await songloft.songs.getById(record.id);
                 if (!current) throw new Error('无法读取已入库歌曲');
+                if (current.type === 'local' && await localAudioFileStatus(current.file_path) === 'missing') {
+                  const recovered = await upsertSearchSongs([item], true, `:missing-file-recovery:${Date.now()}:${index}`);
+                  current = recovered[0]?.id ? await songloft.songs.getById(recovered[0].id) : null;
+                  if (!current) throw new Error('本地文件已丢失，创建恢复下载记录失败');
+                }
                 manager.activate(job.id, current, {
                   total_bytes: probe.total_bytes,
                   content_type: probe.content_type,
@@ -129,7 +143,7 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
 
     status: async (req: HTTPRequest): Promise<HTTPResponse> => {
       const id = parseQuery(req.query || '').id || '';
-      if (!id) return ok({ jobs: manager.list() });
+      if (!id) return ok({ jobs: manager.list(), queue: manager.getQueueState() });
       const job = manager.get(id);
       if (!job) return fail('下载任务不存在或已过期', 404);
       return ok({ job });
@@ -151,6 +165,25 @@ export function downloadHandlers(manager: DownloadManager, runtimeManager: Runti
       if (!query.id) return fail('缺少下载任务 id', 400);
       if (!manager.remove(query.id)) return fail('任务不存在，或已进入实际下载阶段，Songloft 暂不支持中止传输', 409);
       return ok({ removed: 1 });
+    },
+
+    queue: async (req: HTTPRequest): Promise<HTTPResponse> => {
+      try {
+        const body = parseJSONBody<{ action?: string; id?: string; direction?: 'up' | 'down'; ids?: string[] }>(req);
+        if (body.action === 'pause') return ok({ queue: manager.pause() });
+        if (body.action === 'resume') return ok({ queue: manager.resume() });
+        if (body.action === 'move') {
+          if (!body.id || !['up', 'down'].includes(String(body.direction))) throw new Error('调整顺序需要任务 id 和方向');
+          return ok({ queue: manager.move(body.id, body.direction as 'up' | 'down') });
+        }
+        if (body.action === 'cancel_batch') {
+          if (!Array.isArray(body.ids) || !body.ids.length) throw new Error('请至少选择一个等待任务');
+          return ok({ removed: manager.cancelMany(body.ids), queue: manager.getQueueState() });
+        }
+        throw new Error('不支持的队列操作');
+      } catch (error) {
+        return fail(errorMessage(error), 400);
+      }
     },
   };
 }

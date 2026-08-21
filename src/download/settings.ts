@@ -28,6 +28,11 @@ export interface RequestProtectionSettings {
   playback_interval_ms: number;
 }
 
+export interface DiscoveredMusicDirectory {
+  path: string;
+  status: 'exists' | 'record_only' | 'unknown';
+}
+
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   if (value == null || value === '') return fallback;
   if (typeof value === 'boolean') return value;
@@ -190,9 +195,9 @@ export function resolveDownloadPathSettings(value: Partial<DownloadPathSettings>
   };
 }
 
-export async function discoverMusicDirectories(): Promise<string[]> {
+export async function discoverMusicDirectories(): Promise<DiscoveredMusicDirectory[]> {
   const songs = await songloft.songs.list({ limit: 100000, offset: 0 });
-  const found = new Set<string>();
+  const recorded = new Set<string>();
   for (const song of songs) {
     const path = String(song.file_path || '').replace(/\\/g, '/');
     const slash = path.lastIndexOf('/');
@@ -201,10 +206,25 @@ export async function discoverMusicDirectories(): Promise<string[]> {
     if (directory === DEFAULT_MUSIC_ROOT || directory.startsWith(`${DEFAULT_MUSIC_ROOT}/`)) {
       const relative = directory.slice(DEFAULT_MUSIC_ROOT.length) || '/';
       const parts = relative.split('/').filter(Boolean);
-      for (let index = 1; index <= parts.length; index += 1) found.add(`/${parts.slice(0, index).join('/')}`);
+      for (let index = 1; index <= parts.length; index += 1) recorded.add(`/${parts.slice(0, index).join('/')}`);
     }
   }
-  return Array.from(found).sort((a, b) => a.localeCompare(b)).slice(0, 200);
+  const existing = new Set<string>();
+  let scanned = false;
+  try {
+    const result = await songloft.command.exec('find', [DEFAULT_MUSIC_ROOT, '-type', 'd', '-print'], { timeout: 12000 });
+    if (result.exitCode === 0) {
+      scanned = true;
+      result.stdout.split(/\r?\n/).map(path => path.trim().replace(/\\/g, '/').replace(/\/+$/, '')).filter(Boolean).forEach(directory => {
+        if (directory.startsWith(`${DEFAULT_MUSIC_ROOT}/`)) existing.add(directory.slice(DEFAULT_MUSIC_ROOT.length));
+      });
+    }
+  } catch { /* retain unverified curve records when probing is unavailable */ }
+  const paths = new Set([...recorded, ...existing]);
+  return Array.from(paths).sort((a, b) => a.localeCompare(b)).slice(0, 200).map(path => ({
+    path,
+    status: existing.has(path) ? 'exists' : scanned ? 'record_only' : 'unknown',
+  }));
 }
 
 export async function getDownloadTargetDir(): Promise<string> {

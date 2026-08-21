@@ -20,6 +20,7 @@ import { handleLxSyncWebSocket } from './lx_sync/protocol_ws';
 import { LxSyncService } from './lx_sync/service';
 import { addSearchHistory, clearSearchHistory, getHotSearches, getSearchHistory, removeSearchHistory } from './search/discovery';
 import { loadSharedPlaylist } from './songlist/shared';
+import { runDiagnostics } from './handlers/diagnostics';
 
 const router = createRouter();
 const runtimeManager = new RuntimeManager();
@@ -75,6 +76,12 @@ router.get('/api/status', async () => jsonResponse({
   },
 }));
 
+router.post('/api/diagnostics/run', async () => jsonResponse({
+  code: 0,
+  msg: 'success',
+  data: await runDiagnostics({ initialized: () => initialized, runtimeManager, sourceManager, lxSyncService, downloadManager }),
+}));
+
 router.post('/api/search', createSearchRoute());
 router.get('/api/search/discovery', async () => {
   const [hot, history] = await Promise.all([getHotSearches(), getSearchHistory()]);
@@ -106,6 +113,7 @@ router.post('/api/songs/download/batch', downloadApi.createBatch);
 router.get('/api/songs/download', downloadApi.status);
 router.post('/api/songs/download/retry', downloadApi.retry);
 router.delete('/api/songs/download', downloadApi.remove);
+router.post('/api/songs/download/queue', downloadApi.queue);
 router.get('/api/upgrade/scan', upgradeApi.scan);
 router.post('/api/upgrade/probe-unknown', upgradeApi.probeUnknown);
 router.get('/api/upgrade/probe-tool', upgradeApi.probeToolStatus);
@@ -249,6 +257,7 @@ async function onInit(): Promise<void> {
   } catch (error) {
     songloft.log.warn(`[neo-lxbridge] LX sync address discovery failed: ${String(error)}`);
   }
+  await downloadManager.init();
   await sourceManager.init();
   initialized = true;
   registerToMiot();
@@ -267,6 +276,7 @@ async function onDeinit(): Promise<void> {
     }
   } catch { /* MIoT may be absent or already stopped. */ }
   lxSyncService.dropAllConnections();
+  await downloadManager.flush();
   await runtimeManager.destroyAll();
   songloft.log.info('[neo-lxbridge] deinitialized');
 }
