@@ -40,7 +40,7 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-          <span class="version-badge">v1.1.5</span>
+          <span class="version-badge">v1.2.0</span>
             </div>
             <p>开放音源桥接 · 私人音乐管理</p>
           </div>
@@ -319,7 +319,7 @@
           </div>
 
           <div class="import-options import-options-three">
-            <div class="field">
+            <div class="field setting-select-card import-setting-card">
               <label for="batchPlaylistTarget">同时加入歌单（可选）</label>
               <select id="batchPlaylistTarget">
                 <option value="">仅导入 Songloft 歌曲库</option>
@@ -327,11 +327,11 @@
               </select>
               <small class="field-help">不选择歌单时，歌曲仍会出现在 Songloft 的全部歌曲中。</small>
             </div>
-            <div id="batchNewPlaylistField" class="field hidden">
+            <div id="batchNewPlaylistField" class="field setting-select-card import-setting-card hidden">
               <label for="playlistName">新建歌单名称</label>
               <input id="playlistName" placeholder="例如：洛雪收藏">
             </div>
-            <label class="check-card">
+            <label class="check-card import-setting-card">
               <input id="fetchLyric" type="checkbox" checked>
               <span class="check-mark"></span>
               <span>
@@ -339,18 +339,17 @@
                 <small>导入时调用对应平台的歌词接口</small>
               </span>
             </label>
+            <div class="actions import-inline-actions">
+              <button id="importButton" class="primary" type="button">
+                <span>导入到 Songloft</span>
+              </button>
+              <button id="batchDownloadButton" class="secondary" type="button">
+                <span>批量下载选中歌曲</span>
+              </button>
+            </div>
           </div>
 
           <div id="importList" class="compact-list"></div>
-          <div class="actions">
-            <button id="importButton" class="primary" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
-              <span>导入到 Songloft</span>
-            </button>
-            <button id="batchDownloadButton" class="secondary" type="button">
-              <span>批量下载选中歌曲</span>
-            </button>
-          </div>
         </div>
       </section>
 
@@ -384,33 +383,138 @@
       </section>
 
       <section id="tab-upgrade" class="panel">
-        <div class="card">
-          <div class="section-heading row between">
+        <div class="card upgrade-intro-card">
+          <div class="section-heading">
             <div>
               <span class="section-kicker">保留旧版</span>
               <h2>安全洗版</h2>
               <p class="muted">扫描本地低码率歌曲，匹配高音质候选并下载到独立目录。不会删除、覆盖或移动旧歌曲。</p>
             </div>
-            <div class="row upgrade-heading-actions">
-              <button id="probeUnknownBitrates" class="secondary" type="button">重新探测未知码率</button>
-              <button id="scanUpgradeSongs" class="primary" type="button">扫描低音质歌曲</button>
-            </div>
           </div>
           <div class="upgrade-safety-note">
             <strong>安全保证</strong>
-            <span>新版默认保存到 <code>/app/music/LxBridge-Upgrades</code>；旧文件、原歌曲记录和歌单关系始终保留。请试听确认后再自行处理旧版。</span>
+            <span>新版保存到独立目录，不会删除、覆盖或移动原歌曲；旧记录和歌单关系始终保留。</span>
           </div>
-          <div class="upgrade-probe-note">
+        </div>
+
+        <div class="card upgrade-step-card">
+          <div class="section-heading settings-heading">
+            <div>
+              <span class="section-kicker">步骤 1</span>
+              <h2>探测环境</h2>
+              <p class="muted">确认容器或插件私有 ffprobe 是否可用，为扫描后的未知码率补充探测做准备。</p>
+            </div>
+          </div>
+          <div class="upgrade-probe-note upgrade-probe-note-compact">
             <div class="upgrade-probe-copy">
-              <div class="upgrade-probe-intro">
-                <strong>未知码率探测</strong>
-                <span>自动选择合适的读取方式，无需修改 Songloft 镜像。</span>
+              <div class="row upgrade-probe-tool-row">
+                <div id="probeToolStatus" class="probe-tool-alert checking"><span class="probe-tool-dot"></span><span><strong>正在检测 ffprobe</strong><small>请稍候…</small></span></div>
+                <button id="refreshProbeTool" class="mini-button" type="button">重新检测</button>
+                <button id="installProbeTool" class="mini-button" type="button">安装插件私有版</button>
+                <button id="removeProbeTool" class="mini-button hidden" type="button">删除插件私有版</button>
               </div>
-              <div class="upgrade-probe-features">
-                <div><strong>精确探测</strong><span>优先使用容器现有的 <code>ffprobe</code>，缺失时可安装插件私有版本。</span></div>
-                <div><strong>路径兼容</strong><span>数据库中的 <code>music/...</code> 会自动对应到容器的 <code>/app/music/...</code>。</span></div>
-                <div><strong>安全回退</strong><span>无法直接读取时，根据文件大小与时长生成明确标记的估算码率。</span></div>
-              </div>
+            </div>
+          </div>
+          <details class="download-directory-guide upgrade-probe-guide">
+            <summary>探测方式说明</summary>
+            <div class="download-directory-guide-body upgrade-probe-features">
+              <div><strong>精确探测</strong><span>优先使用容器现有的 <code>ffprobe</code>，缺失时可安装插件私有版本。</span></div>
+              <div><strong>路径兼容</strong><span>数据库中的 <code>music/...</code> 会自动对应到容器的 <code>/app/music/...</code>。</span></div>
+              <div><strong>安全回退</strong><span>无法直接读取时，根据文件大小与时长生成明确标记的估算码率。</span></div>
+            </div>
+          </details>
+        </div>
+
+        <div class="card upgrade-step-card">
+          <div class="section-heading settings-heading">
+            <div>
+              <span class="section-kicker">步骤 2</span>
+              <h2>洗版规则</h2>
+              <p class="muted">设置扫描阈值、候选最低音质、时长容差和新版保存位置。</p>
+            </div>
+          </div>
+          <div class="upgrade-settings-grid">
+            <div class="field setting-select-card upgrade-setting-card">
+              <label for="upgradeMaxBitrate">低于此码率则洗版</label>
+              <select id="upgradeMaxBitrate">
+                <option value="192">192 kbps</option>
+                <option value="256">256 kbps</option>
+                <option value="320" selected>320 kbps</option>
+                <option value="500">500 kbps</option>
+              </select>
+            </div>
+            <div class="field setting-select-card upgrade-setting-card">
+              <label for="upgradeQuality">新版最低音质</label>
+              <select id="upgradeQuality">
+                <option value="128k">标准 · 128K</option>
+                <option value="320k">高品质 · 320K</option>
+                <option value="flac" selected>无损 · FLAC</option>
+                <option value="flac24bit">FLAC 24-Bit</option>
+                <option value="hires">Hi-Res 无损</option>
+                <option value="atmos">沉浸声 · Atmos</option>
+                <option value="atmos_plus">臻品音质 · Atmos Plus</option>
+                <option value="master">臻品母带</option>
+              </select>
+            </div>
+            <div class="field setting-select-card upgrade-setting-card">
+              <label for="upgradeDurationDiff">最大时长误差</label>
+              <select id="upgradeDurationDiff">
+                <option value="1">±1 秒</option>
+                <option value="3" selected>±3 秒</option>
+                <option value="5">±5 秒</option>
+                <option value="10">±10 秒</option>
+              </select>
+            </div>
+            <div class="field setting-select-card upgrade-setting-card">
+              <label for="upgradeTargetDir">新版保存目录</label>
+              <input id="upgradeTargetDir" type="text" value="/LxBridge-Upgrades" placeholder="/LxBridge-Upgrades">
+            </div>
+          </div>
+          <p class="resolved-path-callout upgrade-resolved-path">最终实际保存路径：<span id="upgradeResolvedPath">/app/music/LxBridge-Upgrades</span></p>
+          <details class="upgrade-score-help">
+            <summary>匹配分如何计算？</summary>
+            <div class="upgrade-score-help-body">
+              <div><strong>歌名（最高 100 分）</strong><span>完全一致 +100；一方包含另一方 +60。</span></div>
+              <div><strong>歌手（最高 60 分）</strong><span>完全一致 +60；一方包含另一方 +35。</span></div>
+              <div><strong>时长（最高 30 分）</strong><span>完全一致 +30；每相差 1 秒扣 1 分，最低为 0。</span></div>
+              <p>满分 190 分。原歌曲有歌手信息时至少需要 130 分，没有歌手信息时至少需要 90 分；超过上方“最大时长误差”的候选会直接排除。同分时优先选择时长差更小的歌曲。格式、容量、码率和目标音质不参与匹配分。</p>
+            </div>
+          </details>
+          <div class="settings-card-actions">
+            <button id="scanUpgradeSongs" class="primary" type="button">扫描低音质歌曲</button>
+          </div>
+        </div>
+
+        <div class="card upgrade-step-card">
+          <div class="section-heading settings-heading row between">
+            <div>
+              <span class="section-kicker">步骤 3</span>
+              <h2>扫描结果</h2>
+              <p class="muted">搜索扫描结果，批量匹配安全候选并下载已确认的高音质版本。</p>
+            </div>
+            <span id="upgradeSelectedCount" class="badge hidden">已选择 0 首</span>
+          </div>
+          <div id="upgradeResultTools" class="upgrade-results-tools hidden">
+            <div class="upgrade-batch-toolbar">
+            <div class="field upgrade-search-field">
+              <label for="upgradeSearch">搜索扫描结果</label>
+              <input id="upgradeSearch" type="search" placeholder="搜索歌名、歌手或文件路径">
+            </div>
+            <button id="toggleUpgradeSelection" class="secondary" type="button">全选当前结果</button>
+            <button id="batchMatchUpgradeSongs" class="secondary" type="button">批量匹配最佳版本</button>
+            <button id="batchDownloadUpgradeSongs" class="primary" type="button">下载已匹配最佳版本</button>
+            </div>
+            <p class="muted upgrade-batch-help">批量匹配会逐首搜索并自动选择通过歌名、歌手和时长安全校验的最佳候选；批量下载继续使用串行队列和下载安全间隔。</p>
+          </div>
+          <p id="upgradeScanState" class="muted"></p>
+          <div id="upgradeScanSummary" class="upgrade-scan-summary hidden"></div>
+          <div id="upgradeFormatSummary" class="upgrade-format-summary hidden"></div>
+          <section id="upgradeUnknownSection" class="upgrade-unknown-section hidden">
+            <div class="row between upgrade-unknown-heading">
+              <div><strong>码率未知歌曲</strong><span id="upgradeUnknownCount"></span></div>
+              <button id="toggleUnknownSongs" class="mini-button" type="button">展开列表</button>
+            </div>
+            <div class="upgrade-unknown-remediation">
               <div class="upgrade-probe-options">
                 <label>每批数量
                   <select id="probeBatchSize">
@@ -429,78 +533,7 @@
                   </select>
                 </label>
               </div>
-              <div class="row upgrade-probe-tool-row">
-                <div id="probeToolStatus" class="probe-tool-alert checking"><span class="probe-tool-dot"></span><span><strong>正在检测 ffprobe</strong><small>请稍候…</small></span></div>
-                <button id="refreshProbeTool" class="mini-button" type="button">重新检测</button>
-                <button id="installProbeTool" class="mini-button" type="button">安装插件私有版</button>
-                <button id="removeProbeTool" class="mini-button hidden" type="button">删除插件私有版</button>
-              </div>
-            </div>
-          </div>
-          <div class="upgrade-settings-grid">
-            <div class="field">
-              <label for="upgradeMaxBitrate">低于此码率则洗版</label>
-              <select id="upgradeMaxBitrate">
-                <option value="192">192 kbps</option>
-                <option value="256">256 kbps</option>
-                <option value="320" selected>320 kbps</option>
-                <option value="500">500 kbps</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="upgradeQuality">新版最低音质</label>
-              <select id="upgradeQuality">
-                <option value="128k">标准 · 128K</option>
-                <option value="320k">高品质 · 320K</option>
-                <option value="flac" selected>无损 · FLAC</option>
-                <option value="flac24bit">FLAC 24-Bit</option>
-                <option value="hires">Hi-Res 无损</option>
-                <option value="atmos">沉浸声 · Atmos</option>
-                <option value="atmos_plus">臻品音质 · Atmos Plus</option>
-                <option value="master">臻品母带</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="upgradeDurationDiff">最大时长误差</label>
-              <select id="upgradeDurationDiff">
-                <option value="1">±1 秒</option>
-                <option value="3" selected>±3 秒</option>
-                <option value="5">±5 秒</option>
-                <option value="10">±10 秒</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="upgradeTargetDir">新版保存目录</label>
-              <input id="upgradeTargetDir" type="text" value="/LxBridge-Upgrades" placeholder="/LxBridge-Upgrades">
-              <small class="field-help">最终路径：<span id="upgradeResolvedPath">/app/music/LxBridge-Upgrades</span></small>
-            </div>
-          </div>
-          <details class="upgrade-score-help">
-            <summary>匹配分如何计算？</summary>
-            <div class="upgrade-score-help-body">
-              <div><strong>歌名（最高 100 分）</strong><span>完全一致 +100；一方包含另一方 +60。</span></div>
-              <div><strong>歌手（最高 60 分）</strong><span>完全一致 +60；一方包含另一方 +35。</span></div>
-              <div><strong>时长（最高 30 分）</strong><span>完全一致 +30；每相差 1 秒扣 1 分，最低为 0。</span></div>
-              <p>满分 190 分。原歌曲有歌手信息时至少需要 130 分，没有歌手信息时至少需要 90 分；超过上方“最大时长误差”的候选会直接排除。同分时优先选择时长差更小的歌曲。格式、容量、码率和目标音质不参与匹配分。</p>
-            </div>
-          </details>
-          <div class="upgrade-batch-toolbar">
-            <div class="field upgrade-search-field">
-              <label for="upgradeSearch">搜索扫描结果</label>
-              <input id="upgradeSearch" type="search" placeholder="搜索歌名、歌手或文件路径">
-            </div>
-            <button id="toggleUpgradeSelection" class="secondary" type="button">全选当前结果</button>
-            <button id="batchMatchUpgradeSongs" class="secondary" type="button">批量匹配最佳版本</button>
-            <button id="batchDownloadUpgradeSongs" class="primary" type="button">下载已匹配最佳版本</button>
-          </div>
-          <p class="muted upgrade-batch-help">批量匹配会逐首搜索，并自动选择匹配分最高、歌名歌手与时长均通过安全校验的第一候选；批量下载继续使用串行队列和下载安全间隔。</p>
-          <p id="upgradeScanState" class="muted"></p>
-          <div id="upgradeScanSummary" class="upgrade-scan-summary hidden"></div>
-          <div id="upgradeFormatSummary" class="upgrade-format-summary hidden"></div>
-          <section id="upgradeUnknownSection" class="upgrade-unknown-section hidden">
-            <div class="row between upgrade-unknown-heading">
-              <div><strong>码率未知歌曲</strong><span id="upgradeUnknownCount"></span></div>
-              <button id="toggleUnknownSongs" class="mini-button" type="button">展开列表</button>
+              <button id="probeUnknownBitrates" class="secondary" type="button">重新探测未知码率</button>
             </div>
             <div id="upgradeUnknownList" class="upgrade-unknown-list hidden"></div>
           </section>
@@ -641,8 +674,8 @@
                 <p class="muted">选项会根据已启用音源动态更新；目标音质不可用时，插件会自动逐级降级并提示实际音质。</p>
               </div>
             </div>
-            <div class="settings-inline-row">
-              <div class="field grow">
+            <div class="settings-inline-row playback-settings-row">
+              <div class="field grow setting-select-card">
                 <label for="defaultQualitySetting">默认音质</label>
                 <select id="defaultQualitySetting">
                   <option value="128k">标准 · 128K</option>
@@ -663,6 +696,14 @@
                   <small>关闭后，请求音质解析失败会直接报错，不会下载较低音质文件。</small>
                 </span>
               </label>
+              <label class="check-card">
+                <input id="showCompatibilityNotice" type="checkbox" checked>
+                <span class="check-mark"></span>
+                <span>
+                  <strong>兼容播放提示</strong>
+                  <small>使用 Songloft 兼容代理成功播放时提示；关闭不影响自动切换和失败错误。</small>
+                </span>
+              </label>
               <button id="saveSettings" class="primary settings-save" type="button">保存</button>
             </div>
             <p id="playbackSettingsState" class="muted settings-state" aria-live="polite"></p>
@@ -672,7 +713,7 @@
             <div class="section-heading settings-heading">
               <div>
                 <span class="section-kicker">下载设置</span>
-                <h2>下载目录</h2>
+                <h2>文件保存</h2>
                 <p class="muted">留空时使用 Songloft 默认 downloads；自定义目录必须位于 Songloft 的 music_path 内。</p>
               </div>
             </div>
@@ -685,14 +726,14 @@
               <button id="refreshDownloadDirectories" class="secondary settings-save" type="button">刷新已有目录</button>
             </div>
             <small class="field-help download-directory-help">Docker 默认前缀为 <code>/app/music</code>；填写 <code>/LxBridge</code> 时，最终路径为 <code>/app/music/LxBridge</code>。也可以填写完整路径。</small>
-            <p id="downloadDirectoryState" class="download-directory-state muted"></p>
+            <p id="downloadDirectoryState" class="download-directory-state resolved-path-callout" role="status"></p>
             <div class="download-path-options">
               <label class="check-card">
                 <input id="downloadCreateArtistFolder" type="checkbox">
                 <span class="check-mark"></span>
                 <span><strong>按歌手创建文件夹</strong><small>默认关闭；关闭时歌曲直接平铺到目标目录，避免 Songloft 自动生成大量单曲文件歌单。</small></span>
               </label>
-              <div class="field">
+              <div class="field setting-select-card">
                 <label for="downloadFilenameOrder">文件名格式</label>
                 <select id="downloadFilenameOrder">
                   <option value="title_artist">歌曲名-歌手名</option>
@@ -708,8 +749,38 @@
               <button id="addDownloadFavorite" class="secondary" type="button">添加常用目录</button>
             </div>
             <div id="downloadFavoriteList" class="favorite-directory-list"></div>
-            <button id="saveDownloadSettings" class="primary settings-save" type="button">保存下载设置</button>
-            <div class="protection-settings">
+            <div class="settings-card-actions">
+              <button id="saveDownloadSettings" class="primary settings-save" type="button">保存文件设置</button>
+            </div>
+            <details class="download-directory-guide">
+              <summary>下载目录使用说明</summary>
+              <div class="download-directory-guide-body">
+                <p><strong>填写容器内路径：</strong>目录必须位于 Songloft 的 <code>music_path</code> 内，不能填写 NAS 文件管理器中的显示名称。</p>
+                <p>例如错误信息显示 <code>music_path = /app/music</code>，要保存到音乐目录下的 LxBridge 文件夹，应填写：</p>
+                <pre>/app/music/LxBridge</pre>
+                <p>如果容器把 <code>/app/music</code> 映射为 NAS 的“音乐”文件夹，最终位置就是：</p>
+                <pre>音乐/LxBridge/歌手-专辑/歌曲文件</pre>
+                <ul>
+                  <li>留空：使用 Songloft 默认 <code>downloads</code> 目录。</li>
+                  <li>自定义目录默认平铺保存为“歌曲名-歌手名”，不会再自动创建“歌手-专辑”目录。</li>
+                  <li>开启“按歌手创建文件夹”后，文件保存为“歌手/歌曲名-歌手名”。</li>
+                  <li>保存后仅影响新建下载任务；旧任务点击“重试”仍使用原目录。</li>
+                  <li>已有文件不会自动移动。要应用新目录，请删除失败记录后重新创建下载任务。</li>
+                  <li>提示目录越界或不可写时，请检查 <code>music_path</code>、容器卷映射及写入权限。</li>
+                </ul>
+              </div>
+            </details>
+          </div>
+
+          <div class="card">
+            <div class="section-heading settings-heading">
+              <div>
+                <span class="section-kicker">请求保护</span>
+                <h2>批量下载保护</h2>
+                <p class="muted">控制批量下载和连续播放解析的请求节奏，降低音源限流或封禁 IP 的风险。</p>
+              </div>
+            </div>
+            <div class="protection-settings protection-settings-standalone">
               <label class="check-card protection-toggle">
                 <input id="downloadProtectionEnabled" type="checkbox" checked>
                 <span class="check-mark"></span>
@@ -730,34 +801,20 @@
                   <small class="field-help">范围 1～30 秒，默认 2 秒；只限制新地址解析，不影响当前歌曲播放和暂停。</small>
                 </div>
               </div>
-              <div class="protection-guide">
-                <strong>功能说明</strong>
+              <p id="protectionSettingsState" class="download-directory-state muted"></p>
+              <div class="settings-card-actions">
+                <button id="saveProtectionSettings" class="primary settings-save" type="button">保存保护设置</button>
+              </div>
+            </div>
+            <details class="download-directory-guide">
+              <summary>批量下载保护说明</summary>
+              <div class="download-directory-guide-body">
                 <ul>
                   <li>下载任务始终按队列逐个执行，不会并发请求多个音源。</li>
                   <li>间隔从上一首下载完成或失败后开始计算，等待期间下一首显示为“安全间隔”。</li>
                   <li>播放保护会错开连续的音源地址解析，避免播放失败时快速切换多首歌曲。</li>
                   <li>关闭保护会取消两个间隔，但下载仍保持串行；频繁请求可能触发音源平台限流或封禁 IP。</li>
                   <li>保存后影响后续请求，不会中断当前正在下载或播放的任务。</li>
-                </ul>
-              </div>
-              <button id="saveProtectionSettings" class="primary settings-save" type="button">保存保护设置</button>
-              <p id="protectionSettingsState" class="download-directory-state muted"></p>
-            </div>
-            <details class="download-directory-guide">
-              <summary>下载目录使用说明</summary>
-              <div class="download-directory-guide-body">
-                <p><strong>填写容器内路径：</strong>目录必须位于 Songloft 的 <code>music_path</code> 内，不能填写 NAS 文件管理器中的显示名称。</p>
-                <p>例如错误信息显示 <code>music_path = /app/music</code>，要保存到音乐目录下的 LxBridge 文件夹，应填写：</p>
-                <pre>/app/music/LxBridge</pre>
-                <p>如果容器把 <code>/app/music</code> 映射为 NAS 的“音乐”文件夹，最终位置就是：</p>
-                <pre>音乐/LxBridge/歌手-专辑/歌曲文件</pre>
-                <ul>
-                  <li>留空：使用 Songloft 默认 <code>downloads</code> 目录。</li>
-                  <li>自定义目录默认平铺保存为“歌曲名-歌手名”，不会再自动创建“歌手-专辑”目录。</li>
-                  <li>开启“按歌手创建文件夹”后，文件保存为“歌手/歌曲名-歌手名”。</li>
-                  <li>保存后仅影响新建下载任务；旧任务点击“重试”仍使用原目录。</li>
-                  <li>已有文件不会自动移动。要应用新目录，请删除失败记录后重新创建下载任务。</li>
-                  <li>提示目录越界或不可写时，请检查 <code>music_path</code>、容器卷映射及写入权限。</li>
                 </ul>
               </div>
             </details>
@@ -814,20 +871,14 @@
               </div>
             </div>
 
-            <div class="api-notice api-best-notice">
-              <strong>Best 接口调用说明</strong>
-              <p>该接口复用 <code>/external/search</code> 的原始搜索顺序，固定以 <code>limit=1</code> 取第一条结果并解析播放地址，不再使用 <code>matchScore</code> 二次排序。</p>
-            </div>
-
-            <div class="api-notice api-topone-notice">
-              <strong>智能音箱插件调用说明</strong>
-              <p>该接口按 <code>topone</code> 格式只返回匹配度最高的一首歌曲，供 Songloft 智能音箱插件的“外部搜索”功能使用。新版智能音箱插件可在“快速选择”中直接选择 <code>Songloft LxBridge</code>，无需手动填写地址。</p>
-            </div>
-
-            <div class="api-notice">
-              <strong>调用说明</strong>
-              <p>请求头使用 <code>Content-Type: application/json</code>。该接口已配置为公开路径，无需携带 Songloft 登录 Token；建议仅在可信局域网环境中使用。</p>
-            </div>
+            <details class="download-directory-guide api-call-guide">
+              <summary>接口调用说明</summary>
+              <div class="download-directory-guide-body">
+                <p><strong>Best 接口：</strong>复用 <code>/external/search</code> 的原始搜索顺序，固定以 <code>limit=1</code> 取第一条结果并解析播放地址，不再使用 <code>matchScore</code> 二次排序。</p>
+                <p><strong>智能音箱插件：</strong><code>topone</code> 接口只返回匹配度最高的一首歌曲，供 Songloft 智能音箱插件的“外部搜索”功能使用。新版插件可在“快速选择”中直接选择 <code>Songloft LxBridge</code>，无需手动填写地址。</p>
+                <p><strong>请求要求：</strong>请求头使用 <code>Content-Type: application/json</code>。接口已配置为公开路径，无需携带 Songloft 登录 Token；建议仅在可信局域网环境中使用。</p>
+              </div>
+            </details>
 
             <details class="api-details" open>
               <summary>请求 / 响应示例</summary>

@@ -468,8 +468,12 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .check-card input:checked + .check-mark { border-color: var(--primary); background: var(--primary); }
 .check-card input:checked + .check-mark::after { content: ""; width: 9px; height: 5px; border-left: 2px solid var(--primary-contrast); border-bottom: 2px solid var(--primary-contrast); transform: translateY(-1px) rotate(-45deg); }
 .check-card strong, .check-card small { display: block; }
-.check-card strong { color: var(--text-soft); font-size: 13px; }
+.check-card strong, .setting-select-card label { color: var(--text-soft); font-size: 13px; font-weight: 700; line-height: 1.35; }
 .check-card small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.setting-select-card { min-height: 70px; justify-content: center; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); transition: border-color .16s ease, box-shadow .16s ease; }
+.setting-select-card:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent); }
+.setting-select-card select { min-height: 28px; padding: 2px 28px 2px 0; border: 0; border-radius: 0; background-color: transparent; box-shadow: none; }
+.setting-select-card select:focus { outline: 0; box-shadow: none; }
 .compact-item { grid-template-columns: 40px 48px minmax(0,1fr) auto; padding: 9px 12px; box-shadow: none; }
 .compact-item .cover-wrap { width: 48px; height: 48px; }
 .remove-button { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 10px; color: var(--danger); background: transparent; font-size: 20px; }
@@ -659,6 +663,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   gap: 14px;
   align-items: end;
 }
+.playback-settings-row { grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(210px, .8fr)) auto; }
+.playback-settings-row > .setting-select-card,
+.playback-settings-row > .check-card { height: 92px; min-height: 92px; box-sizing: border-box; }
 .settings-save { min-width: 92px; }
 .download-directory-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px; align-items: end; }
 .download-directory-help { display: block; margin-top: 7px; }
@@ -673,7 +680,14 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .download-modal-options { grid-template-columns: minmax(220px, 1fr) minmax(170px, .7fr); margin-top: 14px; }
 .upgrade-safety-note { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 16px; padding: 13px 15px; border: 1px solid color-mix(in srgb, var(--green) 35%, var(--border)); border-radius: 14px; background: color-mix(in srgb, var(--green) 8%, var(--surface-soft)); font-size: 12px; line-height: 1.6; }
 .upgrade-safety-note strong { flex: 0 0 auto; color: var(--green); }
+#tab-upgrade.active { display: grid; gap: 16px; }
+.upgrade-intro-card .upgrade-safety-note { margin-bottom: 0; }
+.upgrade-step-card .settings-heading { margin-bottom: 16px; }
 .upgrade-settings-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 13px; margin-bottom: 14px; }
+.upgrade-setting-card { height: 84px; min-height: 84px; box-sizing: border-box; }
+.upgrade-setting-card input { min-height: 28px; padding: 2px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.upgrade-resolved-path { gap: 4px; margin-bottom: 14px; }
+.upgrade-results-tools { margin-bottom: 12px; }
 .upgrade-score-help { margin: 0 0 14px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-soft); }
 .upgrade-score-help summary { padding: 11px 13px; color: var(--text-soft); font-size: 12px; font-weight: 700; cursor: pointer; user-select: none; }
 .upgrade-score-help-body { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 9px; padding: 0 13px 13px; }
@@ -689,6 +703,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .upgrade-best-badge { display: inline-block; margin-right: 7px; padding: 2px 6px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: 10px; font-style: normal; vertical-align: 1px; }
 .upgrade-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
 .upgrade-probe-note { margin: -4px 0 16px; padding: 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel-soft); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.upgrade-probe-note-compact { margin: 0 0 14px; }
+.upgrade-probe-guide { margin-top: 0; }
 .upgrade-probe-note span { font-size: 12px; line-height: 1.6; }
 .upgrade-probe-copy { flex: 1; min-width: 0; }
 .upgrade-probe-intro { display: flex; align-items: baseline; gap: 9px; margin-bottom: 11px; }
@@ -722,6 +738,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .upgrade-unknown-heading { padding: 12px 14px; }
 .upgrade-unknown-heading strong { margin-right: 7px; }
 .upgrade-unknown-heading span { color: var(--muted); font-size: 12px; }
+.upgrade-unknown-remediation { display: flex; align-items: end; justify-content: space-between; gap: 14px; padding: 0 14px 14px; }
+.upgrade-unknown-remediation .upgrade-probe-options { flex: 1 1 auto; margin-top: 0; }
+.upgrade-unknown-remediation > button { flex: 0 0 auto; white-space: nowrap; }
 .upgrade-unknown-list { border-top: 1px solid var(--border); max-height: 420px; overflow: auto; }
 .upgrade-unknown-item { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(110px, .7fr) minmax(100px, .6fr) minmax(220px, 1.5fr); gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); align-items: center; font-size: 12px; }
 .upgrade-unknown-item:last-child { border-bottom: 0; }
@@ -760,13 +779,13 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .download-verification-passed { color: var(--green); }
 .download-verification-warning { color: var(--warning); }
 .protection-settings { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+.protection-settings-standalone { margin-top: 0; padding-top: 0; border-top: 0; }
 .protection-toggle { margin-bottom: 14px; }
 .protection-intervals { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 14px; margin-bottom: 14px; }
 .protection-intervals.is-disabled { opacity: .5; }
-.protection-guide { margin: 0 0 14px; padding: 13px 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); color: var(--muted); font-size: 12px; line-height: 1.7; }
-.protection-guide strong { color: var(--text-soft); }
-.protection-guide ul { margin: 7px 0 0; padding-left: 18px; }
 .download-directory-state { margin: 10px 0 0; }
+.resolved-path-callout { min-height: 40px; display: flex; align-items: center; margin-top: 10px; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border)); border-radius: 12px; background: color-mix(in srgb, var(--primary) 7%, var(--surface-soft)); color: var(--muted-strong); overflow-wrap: anywhere; }
+.settings-card-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
 .download-directory-guide { margin-top: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); }
 .download-directory-guide summary { padding: 12px 14px; color: var(--text-soft); cursor: pointer; font-weight: 750; }
 .download-directory-guide-body { padding: 0 14px 14px; color: var(--muted-strong); font-size: 13px; line-height: 1.65; }
@@ -835,6 +854,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .player-close { box-shadow: none; }
 
 @media (max-width: 720px) {
+  .playback-settings-row > .setting-select-card,
+  .playback-settings-row > .check-card { height: auto; min-height: 82px; }
   #tab-upgrade .section-heading.row.between { align-items: stretch; flex-direction: column; }
   .upgrade-heading-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .upgrade-batch-toolbar { grid-template-columns: 1fr 1fr; }
@@ -851,6 +872,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .upgrade-scan-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .upgrade-unknown-heading { align-items: flex-start; flex-direction: column; }
   .upgrade-unknown-heading button { width: 100%; }
+  .upgrade-unknown-remediation { align-items: stretch; flex-direction: column; }
+  .upgrade-unknown-remediation > button { width: 100%; }
   .upgrade-song-header, .upgrade-candidate { align-items: stretch; flex-direction: column; }
   .upgrade-song-select { width: 100%; height: 34px; }
   .upgrade-song-header > .secondary, .upgrade-candidate > .mini-button { width: 100%; }
@@ -867,6 +890,7 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .result-tags,
   .result-actions { justify-content: flex-start; }
   .settings-inline-row,
+  .playback-settings-row,
   .download-directory-row,
   .download-path-options,
   .download-favorites,
@@ -1062,9 +1086,14 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   font-size: 12px;
 }
 .import-options-three {
-  grid-template-columns: minmax(250px, 1fr) minmax(220px, .8fr) minmax(240px, .8fr);
+  grid-template-columns: minmax(210px, 1fr) minmax(180px, .75fr) minmax(210px, .75fr) auto;
   align-items: end;
 }
+.import-options-three > .import-setting-card { height: 92px; min-height: 92px; box-sizing: border-box; }
+.setting-select-card.import-setting-card { gap: 4px; }
+.import-setting-card .field-help { margin-top: 0; line-height: 1.35; }
+.import-setting-card input[type="text"] { min-height: 28px; padding: 2px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.import-inline-actions { min-width: max-content; align-self: stretch; align-items: center; gap: 10px; margin-top: 0; }
 .field-help {
   display: block;
   margin-top: 6px;
@@ -1144,6 +1173,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
     flex: 0 1 auto;
   }
   .import-options-three { grid-template-columns: 1fr; }
+  .import-options-three > .import-setting-card { height: auto; min-height: 92px; }
+  .import-inline-actions { min-width: 0; align-self: auto; justify-content: stretch; }
+  .import-inline-actions button { flex: 1 1 0; min-width: 0; }
 }
 
 @media (max-width: 520px) {
@@ -1508,6 +1540,8 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .section-heading.row.between > .row button { flex: 1 1 auto; min-width: 0; }
 
   .settings-inline-row .settings-save,
+  .settings-card-actions,
+  .settings-card-actions button,
   .download-directory-row > button,
   .download-favorites > button { width: 100%; }
   .check-card { width: 100%; min-width: 0; }
