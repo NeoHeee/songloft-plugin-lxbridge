@@ -20,6 +20,8 @@
     downloadJobs: {},
     downloadPollers: {},
     downloadTaskList: [],
+    downloadQueue: { paused: false, current_job_id: '', queued_ids: [], source_circuits: [] },
+    downloadSelected: new Set(),
     downloadManagerTimer: 0,
     downloadSettings: {
       target_dir_input: '', target_dir: '', create_artist_folder: false,
@@ -29,6 +31,7 @@
       default_quality: '320k', allow_auto_downgrade: true, show_compatibility_notice: true, configured: false,
     },
     compatibilityNoticeShown: false,
+    diagnostics: null,
     lxSyncSettings: null,
     discoveredDownloadDirs: [],
     downloadModalResolve: null,
@@ -274,6 +277,50 @@
       : button.dataset.label;
   }
 
+  const LxUI = Object.freeze({
+    stepCard({ step = '', state = 'pending', title = '', subtitle = '', body = '' } = {}) {
+      return `<article class="ui-step-card" data-step="${escapeHtml(step)}" data-state="${escapeHtml(state)}"><div class="ui-step-heading"><div><strong>${escapeHtml(title)}</strong>${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ''}</div></div>${body ? `<p class="ui-step-body">${escapeHtml(body)}</p>` : ''}</article>`;
+    },
+    statusCard({ tone = 'neutral', eyebrow = '', title = '', badge = '', summary = '', details = null } = {}) {
+      return `<article class="ui-status-card" data-tone="${escapeHtml(tone)}"><div class="ui-status-head"><span class="ui-status-indicator"></span><div>${eyebrow ? `<small>${escapeHtml(eyebrow)}</small>` : ''}<strong>${escapeHtml(title)}</strong></div>${badge ? `<span class="ui-status-badge">${escapeHtml(badge)}</span>` : ''}</div>${summary ? `<p class="ui-status-summary">${escapeHtml(summary)}</p>` : ''}${details ? LxUI.diagnostic(details) : ''}</article>`;
+    },
+    diagnostic({ label = '查看诊断', summary = '', raw = '' } = {}) {
+      if (!summary && !raw) return '';
+      return `<details class="ui-diagnostic"><summary>${escapeHtml(label)}</summary><div class="ui-diagnostic-content">${summary ? `<p class="ui-diagnostic-summary">${escapeHtml(summary)}</p>` : ''}${raw ? `<pre class="ui-diagnostic-raw">${escapeHtml(raw)}</pre>` : ''}</div></details>`;
+    },
+    impactPreview({ title = '操作影响', items = [] } = {}) {
+      return `<section class="ui-impact-preview"><strong>${escapeHtml(title)}</strong><ul class="ui-impact-list">${items.map(item => `<li><span>${escapeHtml(item.label || '')}</span><b>${escapeHtml(item.value || '')}</b></li>`).join('')}</ul></section>`;
+    },
+  });
+  window.LxUI = LxUI;
+
+  let riskConfirmResolve = null;
+  function closeRiskConfirm(result = false) {
+    $('riskConfirmModal').classList.add('hidden');
+    document.body.classList.remove('modal-open');
+    if (riskConfirmResolve) riskConfirmResolve(Boolean(result));
+    riskConfirmResolve = null;
+  }
+  function confirmRisk({ title = '确认操作', description = '', confirmLabel = '确认', danger = false, items = [] } = {}) {
+    if (riskConfirmResolve) closeRiskConfirm(false);
+    $('riskConfirmTitle').textContent = title;
+    $('riskConfirmDescription').textContent = description;
+    $('riskConfirmImpact').innerHTML = LxUI.impactPreview({ title: '影响预览', items });
+    const accept = $('acceptRiskConfirm');
+    accept.textContent = confirmLabel;
+    accept.className = danger ? 'danger-button risk-confirm-danger' : 'primary';
+    $('riskConfirmModal').classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    return new Promise(resolve => { riskConfirmResolve = resolve; });
+  }
+  $('closeRiskConfirm').addEventListener('click', () => closeRiskConfirm(false));
+  $('cancelRiskConfirm').addEventListener('click', () => closeRiskConfirm(false));
+  $('acceptRiskConfirm').addEventListener('click', () => closeRiskConfirm(true));
+  $('riskConfirmModal').addEventListener('click', event => { if (event.target === $('riskConfirmModal')) closeRiskConfirm(false); });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !$('riskConfirmModal').classList.contains('hidden')) closeRiskConfirm(false);
+  });
+
   function availableQualities() {
     const platform = $('platform')?.value || 'all';
     const ids = platform === 'all' ? Object.keys(state.qualityByPlatform) : [platform];
@@ -374,6 +421,7 @@
     if (name === 'downloads') loadDownloads();
     if (name === 'browse') loadBrowseCatalog();
     if (name === 'sources') loadSources();
+    if (name === 'diagnostics' && !state.diagnostics) runDiagnostics();
     if (name === 'lx-sync') loadLxSyncSettings();
     if (name === 'settings') {
       updateExternalExample($('defaultQualitySetting').value || defaultQuality());
@@ -392,9 +440,14 @@
     status.querySelector('.runtime-title').textContent = active > 0
       ? `${active} 个音源正在运行`
       : loading ? '音源正在初始化' : '未检测到可用音源';
-    status.querySelector('.runtime-subtitle').textContent = active > 0
-      ? '已动态读取音质能力，失败时自动降级'
+    const subtitle = status.querySelector('.runtime-subtitle');
+    const fullDescription = active > 0
+      ? '已动态读取音质能力，解析失败时自动降级'
       : loading ? '正在加载已启用的音源，请稍候' : '搜索和歌词仍然可用';
+    subtitle.textContent = active > 0
+      ? '音质已就绪 · 失败自动降级'
+      : loading ? '正在加载音源，请稍候' : '搜索与歌词仍可使用';
+    status.title = fullDescription;
   }
 
   async function loadStatus() {
@@ -407,6 +460,116 @@
       updateQualityCapabilities(runtimes);
       if (loading) state.statusPollTimer = setTimeout(loadStatus, 1500);
     } catch (error) { toast(error.message); }
+  }
+
+  const diagnosticStatusLabels = { pass: '正常', warn: '需关注', fail: '异常', info: '未启用' };
+  const diagnosticCategoryLabels = { core: '插件核心', media: '音乐与音源', integration: '集成功能' };
+
+  function renderDiagnosticQueueStatus(queue = {}) {
+    const container = $('diagnosticQueueStatus');
+    const queued = Array.isArray(queue.queued_ids) ? queue.queued_ids.length : 0;
+    const circuits = Array.isArray(queue.source_circuits) ? queue.source_circuits : [];
+    const current = state.downloadTaskList.find(job => job.id === queue.current_job_id);
+    const circuitDetail = circuits.length
+      ? circuits.map(item => `${platformNames[item.source_id] || item.source_id}（约 ${Math.max(1, Math.ceil((Number(item.paused_until) - Date.now()) / 60000))} 分钟）`).join('、')
+      : '所有音源均可正常进入下载队列';
+    container.className = 'diagnostic-queue-status ui-status-grid';
+    container.innerHTML = [
+      LxUI.statusCard({
+        tone: queue.paused ? 'warning' : 'success', eyebrow: '下载队列',
+        title: queue.paused ? '队列已暂停' : '队列运行正常', badge: `${queued} 首等待`,
+        summary: `${current ? `当前正在处理《${current.title || '未知歌曲'}》` : '当前没有执行中的下载任务'}；${queued ? `${queued} 首歌曲等待处理。` : '没有等待任务。'}`,
+      }),
+      LxUI.statusCard({
+        tone: circuits.length ? 'warning' : 'success', eyebrow: '音源保护',
+        title: circuits.length ? `${circuits.length} 个音源已保护暂停` : '音源保护正常', badge: circuits.length ? '已触发' : '未触发',
+        summary: `${circuitDetail}。`,
+      }),
+    ].join('');
+  }
+
+  function renderDiagnostics(data) {
+    state.diagnostics = data;
+    const counts = data?.counts || {};
+    const total = Array.isArray(data?.checks) ? data.checks.length : 0;
+    const overallLabel = data?.overall === 'fail' ? '发现异常' : data?.overall === 'warn' ? '检测完成，存在需关注项目' : '全部检测通过';
+    const overview = $('diagnosticOverview');
+    overview.className = `diagnostic-overview ${escapeHtml(data?.overall || 'info')}`;
+    overview.innerHTML = `<div class="diagnostic-overall"><span class="diagnostic-dot"></span><div><strong>${escapeHtml(overallLabel)}</strong><small>共检查 ${total} 项；异常不会自动修改任何设置。</small></div></div>
+      <div class="diagnostic-counts">
+        <span class="pass"><strong>${Number(counts.pass || 0)}</strong>正常</span>
+        <span class="warn"><strong>${Number(counts.warn || 0)}</strong>需关注</span>
+        <span class="fail"><strong>${Number(counts.fail || 0)}</strong>异常</span>
+        <span class="info"><strong>${Number(counts.info || 0)}</strong>未启用</span>
+      </div>`;
+    renderDiagnosticQueueStatus(data.download_queue || {});
+    const diagnosticTone = { pass: 'success', warn: 'warning', fail: 'danger', info: 'neutral' };
+    const groups = ['core', 'media', 'integration'].map(category => {
+      const checks = (data.checks || []).filter(item => item.category === category);
+      return `<section class="diagnostic-group"><h3>${escapeHtml(diagnosticCategoryLabels[category])}</h3><div class="diagnostic-check-grid ui-status-grid">${checks.map(item => LxUI.statusCard({
+        tone: diagnosticTone[item.status] || 'neutral', eyebrow: item.title,
+        title: diagnosticStatusLabels[item.status] || item.status, badge: `${Number(item.duration_ms || 0)} ms`, summary: item.summary,
+        details: item.detail || item.suggestion ? { label: '查看诊断', summary: item.suggestion || '', raw: item.detail || '' } : null,
+      })).join('')}</div></section>`;
+    }).join('');
+    $('diagnosticChecks').innerHTML = groups;
+    $('diagnosticGeneratedAt').textContent = data.generated_at ? `检测时间：${new Date(data.generated_at).toLocaleString()}` : '';
+    $('copyDiagnosticReport').disabled = false;
+    $('diagnosticStepStart').dataset.state = 'complete';
+    $('diagnosticStepRun').dataset.state = 'complete';
+    $('diagnosticStepReview').dataset.state = 'active';
+  }
+
+  function buildDiagnosticReport(data) {
+    const version = document.querySelector('.version-badge')?.textContent || '未知版本';
+    const lines = [
+      `Songloft LxBridge 运行诊断报告`,
+      `版本：${version}`,
+      `生成时间：${data.generated_at || new Date().toISOString()}`,
+      `访问地址：${location.origin}${root}`,
+      `总体结果：${diagnosticStatusLabels[data.overall] || data.overall}`,
+      '',
+    ];
+    const queue = data.download_queue || {};
+    const circuits = Array.isArray(queue.source_circuits) ? queue.source_circuits : [];
+    lines.push(`下载队列：${queue.paused ? '已暂停' : '运行中'}；当前任务 ${queue.current_job_id ? '1' : '0'}；等待任务 ${Array.isArray(queue.queued_ids) ? queue.queued_ids.length : 0}`);
+    lines.push(`音源保护：${circuits.length ? circuits.map(item => platformNames[item.source_id] || item.source_id).join('、') : '未触发'}`, '');
+    (data.checks || []).forEach(item => {
+      lines.push(`[${diagnosticStatusLabels[item.status] || item.status}] ${item.title}`);
+      lines.push(`结果：${item.summary}`);
+      if (item.detail) lines.push(`详情：${item.detail}`);
+      if (item.suggestion) lines.push(`建议：${item.suggestion}`);
+      lines.push(`耗时：${Number(item.duration_ms || 0)} ms`, '');
+    });
+    lines.push('说明：报告不包含同步密码、登录令牌或完整歌曲列表。');
+    return lines.join('\n');
+  }
+
+  async function runDiagnostics() {
+    const button = $('runDiagnostics');
+    setBusy(button, true, '检测中');
+    $('copyDiagnosticReport').disabled = true;
+    $('diagnosticOverview').className = 'diagnostic-overview loading';
+    $('diagnosticOverview').innerHTML = '<div class="diagnostic-overall"><span class="diagnostic-dot"></span><div><strong>正在运行诊断</strong><small>正在依次检查存储、目录、音源和集成功能…</small></div></div>';
+    $('diagnosticChecks').innerHTML = '<div class="empty-state compact-empty"><strong>请稍候</strong><p>检测期间请保持当前页面打开。</p></div>';
+    $('diagnosticQueueStatus').className = 'diagnostic-queue-status hidden';
+    $('diagnosticStepStart').dataset.state = 'complete';
+    $('diagnosticStepRun').dataset.state = 'active';
+    $('diagnosticStepReview').dataset.state = 'disabled';
+    try {
+      const resp = await request('/api/diagnostics/run', { method: 'POST' });
+      renderDiagnostics(resp.data || {});
+      toast(resp.data?.overall === 'pass' ? '运行诊断全部通过' : '运行诊断完成，请查看需关注项目');
+    } catch (error) {
+      state.diagnostics = null;
+      $('diagnosticOverview').className = 'diagnostic-overview fail';
+      $('diagnosticOverview').innerHTML = `<div class="diagnostic-overall"><span class="diagnostic-dot"></span><div><strong>诊断请求失败</strong><small>${escapeHtml(error.message)}</small></div></div>`;
+      $('diagnosticChecks').innerHTML = '<div class="empty-state compact-empty"><strong>未能完成检测</strong><p>请刷新插件页面后重试。</p></div>';
+      $('diagnosticQueueStatus').className = 'diagnostic-queue-status hidden';
+      $('diagnosticStepRun').dataset.state = 'complete';
+      $('diagnosticStepReview').dataset.state = 'active';
+      toast(error.message, 6200);
+    } finally { setBusy(button, false); }
   }
 
   function selectedKey(item) {
@@ -1250,14 +1413,14 @@
       const candidates = state.upgradeCandidates[song.id];
       const candidateMarkup = Array.isArray(candidates)
         ? (candidates.length ? `<div class="upgrade-candidates">${candidates.map((item, index) => `<div class="upgrade-candidate">
-            <div class="upgrade-candidate-copy"><strong>${index === 0 ? '<em class="upgrade-best-badge">最佳匹配</em>' : ''}${escapeHtml(item.title)} · ${escapeHtml(item.artist || '未知歌手')}</strong><span>${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)} · 时长差 ${Number(item.duration_diff || 0).toFixed(1)} 秒 · 匹配分 ${Math.round(Number(item.match_score || 0))}</span>${upgradeCandidateProbeMarkup(item)}</div>
+            <div class="upgrade-candidate-copy"><strong>${index === 0 ? '<em class="upgrade-best-badge">最佳匹配</em>' : ''}${escapeHtml(item.title)} · ${escapeHtml(item.artist || '未知歌手')}</strong><span class="desktop-only">${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)} · 时长差 ${Number(item.duration_diff || 0).toFixed(1)} 秒 · 匹配分 ${Math.round(Number(item.match_score || 0))}</span><details class="mobile-only upgrade-mobile-details"><summary>候选信息</summary><span>${escapeHtml(item.album || '未知专辑')} · ${formatDuration(item.duration)} · 时长差 ${Number(item.duration_diff || 0).toFixed(1)} 秒 · 匹配分 ${Math.round(Number(item.match_score || 0))}</span>${upgradeCandidateProbeMarkup(item)}</details><div class="desktop-only">${upgradeCandidateProbeMarkup(item)}</div></div>
             <button class="mini-button download" type="button" data-upgrade-download="${song.id}" data-candidate-index="${index}">下载新版</button>
           </div>`).join('')}</div>` : '<p class="muted">没有找到满足歌名、歌手和时长条件的安全候选。</p>')
         : '';
       return `<article class="upgrade-song-item">
         <div class="upgrade-song-header">
           <label class="upgrade-song-select" title="加入批量操作"><input type="checkbox" data-upgrade-select="${song.id}" ${state.upgradeSelected.has(Number(song.id)) ? 'checked' : ''}></label>
-          <div class="upgrade-song-copy"><strong>${escapeHtml(song.title)} · ${escapeHtml(song.artist || '未知歌手')}</strong><span>${escapeHtml(String(song.format || '未知格式').toUpperCase())} · ${Number(song.bitrate_kbps || 0)} kbps${song.bitrate_source === 'estimated' ? '（估算）' : ''} · ${formatDuration(song.duration)} · ${escapeHtml(song.file_path || '')}</span></div>
+          <div class="upgrade-song-copy"><strong>${escapeHtml(song.title)} · ${escapeHtml(song.artist || '未知歌手')}</strong><span class="desktop-only">${escapeHtml(String(song.format || '未知格式').toUpperCase())} · ${Number(song.bitrate_kbps || 0)} kbps${song.bitrate_source === 'estimated' ? '（估算）' : ''} · ${formatDuration(song.duration)} · ${escapeHtml(song.file_path || '')}</span><details class="mobile-only upgrade-mobile-details"><summary>歌曲信息</summary><span>${escapeHtml(String(song.format || '未知格式').toUpperCase())} · ${Number(song.bitrate_kbps || 0)} kbps${song.bitrate_source === 'estimated' ? '（估算）' : ''} · ${formatDuration(song.duration)} · ${escapeHtml(song.file_path || '')}</span></details></div>
           <button class="secondary" type="button" data-upgrade-match="${song.id}">匹配高音质版本</button>
         </div>
         ${candidateMarkup}
@@ -1354,7 +1517,7 @@
       ['320～499 kbps', ranges.from_320_to_499],
       ['≥ 500 kbps', ranges.at_least_500],
     ];
-    summary.innerHTML = entries.map(([label, value]) => `<div class="upgrade-stat"><span>${escapeHtml(label)}</span><strong>${Number(value || 0)}</strong></div>`).join('');
+    summary.innerHTML = entries.map(([label, value]) => LxUI.statusCard({ tone: 'neutral', eyebrow: label, title: String(Number(value || 0)) })).join('');
     summary.classList.remove('hidden');
     const formatItems = Array.isArray(statistics.formats) ? statistics.formats : [];
     formats.innerHTML = `<span class="upgrade-format-chip"><strong>本地格式分布</strong></span>${formatItems.map(item => `<span class="upgrade-format-chip">${escapeHtml(item.format)} · ${Number(item.count || 0)}</span>`).join('')}`;
@@ -1400,8 +1563,10 @@
       ? `<div class="upgrade-status-metrics">${metrics.map(metric => `<span class="upgrade-status-metric ${escapeHtml(metric.tone || '')}"><strong>${Number(metric.value || 0)}</strong>${escapeHtml(metric.label)}</span>`).join('')}</div>`
       : '';
     const detailsHtml = renderUpgradeFailureDiagnostics(failures);
-    container.className = `upgrade-operation-status ${tone}`;
-    container.innerHTML = `<span class="upgrade-status-icon" aria-hidden="true"></span><div class="upgrade-status-content"><strong>${escapeHtml(title)}</strong>${description ? `<p>${escapeHtml(description)}</p>` : ''}${metricHtml}${detailsHtml}</div>`;
+    const cardTone = tone === 'loading' || tone === 'info' ? 'running' : tone === 'success' ? 'success' : tone === 'warning' ? 'warning' : 'danger';
+    container.className = 'upgrade-operation-status ui-status-card';
+    container.dataset.tone = cardTone;
+    container.innerHTML = `<div class="ui-status-head"><span class="ui-status-indicator" aria-hidden="true"></span><div><small>运行结果</small><strong>${escapeHtml(title)}</strong></div></div>${description ? `<p class="ui-status-summary">${escapeHtml(description)}</p>` : ''}${metricHtml}${detailsHtml}`;
     container.querySelectorAll('[data-upgrade-copy]').forEach(button => button.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
@@ -1435,6 +1600,8 @@
   async function scanUpgradeSongs() {
     const button = $('scanUpgradeSongs');
     setBusy(button, true, '扫描中');
+    $('upgradeStepRules').dataset.state = 'complete';
+    $('upgradeStepResults').dataset.state = 'active';
     try {
       const bitrate = Number($('upgradeMaxBitrate').value || 320);
       const resp = await request(`/api/upgrade/scan?max_bitrate=${encodeURIComponent(bitrate)}&limit=500`);
@@ -1502,6 +1669,8 @@
     const install = $('installProbeTool');
     const remove = $('removeProbeTool');
     if (!status?.available) {
+      $('upgradeStepProbe').dataset.state = 'active';
+      $('upgradeStepRules').dataset.state = 'pending';
       label.className = 'probe-tool-alert unavailable';
       label.innerHTML = '<span class="probe-tool-dot"></span><span><strong>ffprobe 不可用</strong><small>点击重新探测时会尝试自动安装，失败后改用估算码率。</small></span><em class="probe-status-badge">不可用</em>';
       install.classList.remove('hidden');
@@ -1509,6 +1678,8 @@
       return;
     }
     const source = status.source === 'plugin' ? '插件私有版' : 'Songloft 容器提供';
+    $('upgradeStepProbe').dataset.state = 'complete';
+    if (!state.upgradeScanned) $('upgradeStepRules').dataset.state = 'active';
     const systemExtra = status.source === 'plugin' && status.system_available
       ? `；同时检测到容器版本：${status.system_version || 'ffprobe 可用'}`
       : '';
@@ -1559,7 +1730,10 @@
   async function batchMatchUpgradeSongs() {
     const songs = state.upgradeSongs.filter(song => state.upgradeSelected.has(Number(song.id)));
     if (!songs.length) return toast('请先勾选需要匹配的歌曲');
-    if (!confirm(`将逐首搜索 ${songs.length} 首歌曲，并自动选择每首匹配分最高的安全候选。\n\n搜索请求不会并发，每首之间等待 1 秒，是否继续？`)) return;
+    if (!await confirmRisk({
+      title: '确认批量匹配', description: '系统将逐首搜索并自动选择通过安全校验的最佳候选。', confirmLabel: `开始匹配 ${songs.length} 首`,
+      items: [{ label: '处理歌曲', value: `${songs.length} 首` }, { label: '请求方式', value: '串行，每首间隔 1 秒' }, { label: '文件影响', value: '不会下载或修改文件' }],
+    })) return;
     const button = $('batchMatchUpgradeSongs');
     setBusy(button, true, `匹配 0/${songs.length}`);
     let matched = 0;
@@ -1591,7 +1765,10 @@
   async function batchDownloadUpgradeSongs() {
     const songs = state.upgradeSongs.filter(song => state.upgradeSelected.has(Number(song.id)) && state.upgradeCandidates[song.id]?.[0]);
     if (!songs.length) return toast('没有已匹配的最佳候选，请先执行批量匹配');
-    if (!confirm(`将为 ${songs.length} 首歌曲下载各自匹配分最高的安全候选。\n\n目标音质：${$('upgradeQuality').selectedOptions[0]?.textContent || $('upgradeQuality').value}\n保存目录：${resolvedDownloadPath($('upgradeTargetDir').value)}\n\n任务会串行执行并遵守下载安全间隔，是否继续？`)) return;
+    if (!await confirmRisk({
+      title: '确认批量安全洗版', description: '新版会加入串行下载队列，旧文件、旧记录和歌单关系都会保留。', confirmLabel: `下载 ${songs.length} 首新版`,
+      items: [{ label: '下载歌曲', value: `${songs.length} 首` }, { label: '目标音质', value: $('upgradeQuality').selectedOptions[0]?.textContent || $('upgradeQuality').value }, { label: '保存目录', value: resolvedDownloadPath($('upgradeTargetDir').value) }, { label: '旧版文件', value: '保留，不覆盖' }],
+    })) return;
     const button = $('batchDownloadUpgradeSongs');
     setBusy(button, true, `加入 0/${songs.length}`);
     try {
@@ -1651,14 +1828,59 @@
   });
 
   function downloadStatusLabel(status) {
-    return { pending: '等待解析', resolving: '解析中', queued: '等待下载', downloading: '下载中', verifying: '校验中', completed: '下载完成', failed: '失败' }[status] || status;
+    return { pending: '等待解析', resolving: '解析中', queued: '等待下载', downloading: '下载中', verifying: '校验中', completed: '下载完成', failed: '失败', interrupted: '已中断' }[status] || status;
   }
 
   function downloadStatusText(job) {
     if (job.status === 'queued' && Number(job.wait_until) > Date.now()) {
-      return `安全间隔 · ${Math.max(1, Math.ceil((Number(job.wait_until) - Date.now()) / 1000))} 秒`;
+      const prefix = job.pause_reason === 'source_circuit' ? '音源保护' : '安全间隔';
+      return `${prefix} · ${Math.max(1, Math.ceil((Number(job.wait_until) - Date.now()) / 1000))} 秒`;
     }
     return downloadStatusLabel(job.status);
+  }
+
+  function downloadFailureLabel(category) {
+    return ({
+      network_timeout: '网络异常',
+      rate_limited: '请求受限',
+      address_expired: '地址失效',
+      permission_denied: '权限不足',
+      directory_error: '目录错误',
+      source_error: '音源错误',
+      library_error: '曲库错误',
+      interrupted: '任务中断',
+      unknown: '其他错误',
+    })[category] || '下载失败';
+  }
+
+  function updateDownloadQueueControl() {
+    const queue = state.downloadQueue || {};
+    const queued = Array.isArray(queue.queued_ids) ? queue.queued_ids.length : 0;
+    const circuits = Array.isArray(queue.source_circuits) ? queue.source_circuits : [];
+    const current = state.downloadTaskList.find(job => job.id === queue.current_job_id);
+    $('downloadQueueControl').classList.toggle('is-paused', Boolean(queue.paused));
+    $('downloadQueueControl').classList.toggle('has-circuit', circuits.length > 0);
+    $('downloadQueueTitle').textContent = queue.paused ? '下载队列已暂停' : circuits.length ? '部分音源已进入保护暂停' : '下载队列运行中';
+    $('downloadQueueDetail').textContent = queue.paused
+      ? `当前任务${current ? `《${current.title}》` : ''}完成后不会启动下一首，${queued} 首等待中。`
+      : circuits.length
+        ? `${circuits.map(item => `${platformNames[item.source_id] || item.source_id} ${Math.max(1, Math.ceil((Number(item.paused_until) - Date.now()) / 60000))} 分钟`).join('；')}；其他音源继续处理。`
+        : current ? `正在处理《${current.title}》，另有 ${queued} 首等待。` : queued ? `${queued} 首等待下载。` : '等待新的下载任务。';
+    $('toggleDownloadQueue').textContent = queue.paused ? '继续队列' : '暂停队列';
+    const cancellable = new Set(state.downloadTaskList.filter(job => ['pending', 'resolving', 'queued'].includes(job.status) && job.id !== queue.current_job_id).map(job => job.id));
+    state.downloadSelected = new Set([...state.downloadSelected].filter(id => cancellable.has(id)));
+    $('cancelSelectedDownloads').disabled = state.downloadSelected.size === 0;
+    $('cancelSelectedDownloads').textContent = state.downloadSelected.size ? `取消已选任务（${state.downloadSelected.size}）` : '取消已选任务';
+  }
+
+  async function operateDownloadQueue(payload, successMessage = '') {
+    const resp = await request('/api/songs/download/queue', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    if (resp.data?.queue) state.downloadQueue = resp.data.queue;
+    if (successMessage) toast(successMessage);
+    await loadDownloads();
+    return resp.data;
   }
 
   function renderDownloads() {
@@ -1673,14 +1895,15 @@
       result.total += 1;
       if (['pending', 'resolving', 'queued', 'downloading', 'verifying'].includes(job.status)) result.active += 1;
       if (job.status === 'completed') result.completed += 1;
-      if (job.status === 'failed') result.failed += 1;
+      if (['failed', 'interrupted'].includes(job.status)) result.failed += 1;
       return result;
     }, { total: 0, active: 0, completed: 0, failed: 0 });
     $('downloadSummary').innerHTML = [
-      ['全部', counts.total], ['进行中', counts.active], ['已完成', counts.completed], ['失败', counts.failed],
-    ].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('');
+      ['全部任务', counts.total, 'neutral'], ['进行中', counts.active, counts.active ? 'running' : 'neutral'], ['已完成', counts.completed, counts.completed ? 'success' : 'neutral'], ['失败/中断', counts.failed, counts.failed ? 'danger' : 'neutral'],
+    ].map(([label, value, tone]) => LxUI.statusCard({ tone, eyebrow: label, title: String(value) })).join('');
     $('downloadCount').textContent = String(counts.active);
     $('downloadCount').classList.toggle('hidden', counts.active === 0);
+    updateDownloadQueueControl();
     if (!jobs.length) {
       list.innerHTML = `<div class="empty-state compact-empty"><strong>没有符合条件的任务</strong><p>新的下载任务会自动显示在这里。</p></div>`;
       return;
@@ -1693,29 +1916,46 @@
         new Date(job.created_at).toLocaleString(),
       ].filter(Boolean).map(escapeHtml).join(' · ');
       const statusClass = `status-${escapeHtml(job.status)}`;
-      return `<article class="download-item">
+      const selectable = ['pending', 'resolving', 'queued'].includes(job.status) && job.id !== state.downloadQueue?.current_job_id;
+      const queueIndex = (state.downloadQueue?.queued_ids || []).indexOf(job.id);
+      const cardTone = job.status === 'completed' ? 'success' : ['failed', 'interrupted'].includes(job.status) ? 'danger' : job.status === 'queued' ? 'neutral' : 'running';
+      const secondaryDetails = `${details ? `<p>${details}</p>` : ''}${job.path ? `<p class="download-path" title="${escapeHtml(job.path)}">${escapeHtml(job.path)}</p>` : ''}`;
+      const errorDiagnostic = job.error ? LxUI.diagnostic({ label: `查看失败诊断 · ${downloadFailureLabel(job.error_category)}`, summary: job.error_suggestion || '', raw: job.error }) : '';
+      return `<article class="download-item ui-status-card" data-tone="${cardTone}">
         <div class="download-main">
           <div class="download-title-row">
+            ${selectable ? `<input class="download-select" type="checkbox" data-download-select="${escapeHtml(job.id)}"${state.downloadSelected.has(job.id) ? ' checked' : ''} aria-label="选择下载任务">` : ''}
+            <span class="ui-status-indicator"></span>
             <strong>${escapeHtml(job.title || '未知歌曲')}</strong>
             <span class="download-status ${statusClass}">${escapeHtml(downloadStatusText(job))}</span>
           </div>
-          <p>${details}</p>
+          <div class="download-secondary desktop-only">${secondaryDetails}</div>
+          <details class="download-mobile-details mobile-only"><summary>更多信息</summary>${secondaryDetails}</details>
           <div class="download-progress ${job.status === 'downloading' ? 'is-indeterminate' : ''}" role="progressbar" aria-label="${escapeHtml(downloadStatusText(job))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, Number(job.progress || 0)))}">
             <span style="width:${Math.max(0, Math.min(100, Number(job.progress || 0)))}%"></span>
           </div>
           ${job.status_detail ? `<p class="download-stage-detail">${escapeHtml(job.status_detail)}</p>` : ''}
-          ${job.error ? `<p class="download-error">${escapeHtml(job.error)}</p>` : ''}
+          ${errorDiagnostic}
           ${job.verification_message ? `<p class="${job.verification_status === 'passed' ? 'download-verification-passed' : 'download-verification-warning'}">${escapeHtml(job.verification_message)}</p>` : ''}
-          ${job.path ? `<p class="download-path" title="${escapeHtml(job.path)}">${escapeHtml(job.path)}</p>` : ''}
         </div>
         <div class="download-actions">
-          ${job.status === 'failed' && Number(job.song_id) > 0 ? `<button class="secondary" type="button" data-download-retry="${escapeHtml(job.id)}">重试</button>` : ''}
+          ${queueIndex >= 0 ? `<button class="secondary mini-button" type="button" data-download-move="${escapeHtml(job.id)}" data-direction="up"${queueIndex === 0 ? ' disabled' : ''}>上移</button><button class="secondary mini-button" type="button" data-download-move="${escapeHtml(job.id)}" data-direction="down"${queueIndex === (state.downloadQueue.queued_ids.length - 1) ? ' disabled' : ''}>下移</button>` : ''}
+          ${['failed', 'interrupted'].includes(job.status) && Number(job.song_id) > 0 ? `<button class="secondary" type="button" data-download-retry="${escapeHtml(job.id)}">重新下载</button>` : ''}
           ${job.path ? `<button class="secondary" type="button" data-download-copy="${escapeHtml(job.path)}">复制路径</button>` : ''}
-          ${['pending', 'resolving', 'queued'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}" data-download-remove-kind="cancel">取消任务</button>` : ''}
-          ${['completed', 'failed'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}" data-download-remove-kind="record">删除记录</button>` : ''}
+          ${['pending', 'resolving', 'queued'].includes(job.status) && job.id !== state.downloadQueue?.current_job_id ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}" data-download-remove-kind="cancel">取消任务</button>` : ''}
+          ${['completed', 'failed', 'interrupted'].includes(job.status) ? `<button class="danger-button" type="button" data-download-remove="${escapeHtml(job.id)}" data-download-remove-kind="record">删除记录</button>` : ''}
         </div>
       </article>`;
     }).join('');
+    list.querySelectorAll('[data-download-select]').forEach(input => input.addEventListener('change', () => {
+      if (input.checked) state.downloadSelected.add(input.dataset.downloadSelect);
+      else state.downloadSelected.delete(input.dataset.downloadSelect);
+      updateDownloadQueueControl();
+    }));
+    list.querySelectorAll('[data-download-move]').forEach(button => button.addEventListener('click', async () => {
+      try { await operateDownloadQueue({ action: 'move', id: button.dataset.downloadMove, direction: button.dataset.direction }); }
+      catch (error) { toast(error.message, 5200); }
+    }));
     list.querySelectorAll('[data-download-retry]').forEach(button => button.addEventListener('click', async () => {
       try {
         await request('/api/songs/download/retry', {
@@ -1729,6 +1969,14 @@
     list.querySelectorAll('[data-download-remove]').forEach(button => button.addEventListener('click', async () => {
       try {
         const cancelling = button.dataset.downloadRemoveKind === 'cancel';
+        const job = state.downloadTaskList.find(item => item.id === button.dataset.downloadRemove);
+        const accepted = await confirmRisk({
+          title: cancelling ? '取消下载任务' : '删除下载记录',
+          description: cancelling ? '只取消尚未进入实际传输的任务。' : '只删除下载管理中的历史记录。',
+          confirmLabel: cancelling ? '取消这个任务' : '删除这条记录', danger: true,
+          items: [{ label: '歌曲', value: job?.title || '当前任务' }, { label: '已下载文件', value: '不删除' }, { label: '曲库歌曲', value: '不删除' }],
+        });
+        if (!accepted) return;
         await request(`/api/songs/download?id=${encodeURIComponent(button.dataset.downloadRemove)}`, { method: 'DELETE' });
         if (cancelling) toast('已取消下载任务');
         loadDownloads();
@@ -1742,6 +1990,7 @@
     try {
       const resp = await request('/api/songs/download');
       state.downloadTaskList = resp.data?.jobs || [];
+      state.downloadQueue = resp.data?.queue || state.downloadQueue;
       state.downloadTaskList.forEach(job => { if (job.client_key) state.downloadJobs[job.client_key] = job; });
       renderDownloads();
       renderResults();
@@ -2412,8 +2661,14 @@ curl -X POST "${endpoint}" \
   }
 
   function updateDirectorySuggestions() {
-    const values = [...new Set([...(state.downloadSettings.favorite_dirs || []), ...state.discoveredDownloadDirs])];
-    $('downloadDirectorySuggestions').innerHTML = values.map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
+    const entries = new Map();
+    (state.downloadSettings.favorite_dirs || []).forEach(path => entries.set(path, { path, status: 'favorite' }));
+    state.discoveredDownloadDirs.forEach(item => {
+      const entry = typeof item === 'string' ? { path: item, status: 'unknown' } : item;
+      if (entry?.path && !entries.has(entry.path)) entries.set(entry.path, entry);
+    });
+    const label = item => item.status === 'favorite' ? '常用目录' : item.status === 'exists' ? '实际存在' : item.status === 'record_only' ? '仅曲库记录，实际不存在' : '曲库记录，未能验证';
+    $('downloadDirectorySuggestions').innerHTML = Array.from(entries.values()).map(item => `<option value="${escapeHtml(item.path)}" label="${escapeHtml(label(item))}">${escapeHtml(label(item))}</option>`).join('');
   }
 
   function updateDownloadDirectoryPreview() {
@@ -2428,7 +2683,11 @@ curl -X POST "${endpoint}" \
       const resp = await request('/api/settings/download/directories');
       state.discoveredDownloadDirs = Array.isArray(resp.data?.discovered) ? resp.data.discovered : [];
       updateDirectorySuggestions();
-      if (showMessage) toast(`已发现 ${state.discoveredDownloadDirs.length} 个包含歌曲的目录`);
+      if (showMessage) {
+        const existing = state.discoveredDownloadDirs.filter(item => typeof item === 'object' && item.status === 'exists').length;
+        const stale = state.discoveredDownloadDirs.filter(item => typeof item === 'object' && item.status === 'record_only').length;
+        toast(`曲库目录读取完成：${existing} 个实际存在${stale ? `，${stale} 个仅有历史记录` : ''}`);
+      }
     } catch (error) {
       if (showMessage) toast(`读取已有目录失败：${error.message}`, 5200);
     }
@@ -2608,8 +2867,36 @@ curl -X POST "${endpoint}" \
 
   $('downloadFilter').addEventListener('change', renderDownloads);
   $('refreshDownloads').addEventListener('click', loadDownloads);
+  $('toggleDownloadQueue').addEventListener('click', async () => {
+    const button = $('toggleDownloadQueue');
+    setBusy(button, true, state.downloadQueue?.paused ? '继续中' : '暂停中');
+    try {
+      await operateDownloadQueue({ action: state.downloadQueue?.paused ? 'resume' : 'pause' }, state.downloadQueue?.paused ? '下载队列已继续' : '下载队列已暂停');
+    } catch (error) { toast(error.message, 5200); }
+    finally { setBusy(button, false); updateDownloadQueueControl(); }
+  });
+  $('selectWaitingDownloads').addEventListener('click', () => {
+    const ids = state.downloadTaskList.filter(job => ['pending', 'resolving', 'queued'].includes(job.status) && job.id !== state.downloadQueue?.current_job_id).map(job => job.id);
+    const allSelected = ids.length > 0 && ids.every(id => state.downloadSelected.has(id));
+    state.downloadSelected = allSelected ? new Set() : new Set(ids);
+    renderDownloads();
+  });
+  $('cancelSelectedDownloads').addEventListener('click', async () => {
+    const ids = [...state.downloadSelected];
+    if (!ids.length || !await confirmRisk({ title: '取消等待任务', description: '仅移除尚未开始的下载任务，不会删除曲库歌曲或已经下载的文件。', confirmLabel: `取消 ${ids.length} 个任务`, danger: true, items: [{ label: '取消任务', value: `${ids.length} 个` }, { label: '已下载文件', value: '不受影响' }, { label: '曲库记录', value: '不受影响' }] })) return;
+    const button = $('cancelSelectedDownloads');
+    setBusy(button, true, '取消中');
+    try {
+      const data = await operateDownloadQueue({ action: 'cancel_batch', ids });
+      state.downloadSelected.clear();
+      toast(`已取消 ${Number(data?.removed || 0)} 个任务`);
+    } catch (error) { toast(error.message, 5200); }
+    finally { setBusy(button, false); updateDownloadQueueControl(); }
+  });
   $('clearFinishedDownloads').addEventListener('click', async () => {
-    if (!confirm('确定清除所有已完成和失败的下载记录吗？已下载文件不会被删除。')) return;
+    const ended = state.downloadTaskList.filter(job => ['completed', 'failed', 'interrupted'].includes(job.status)).length;
+    if (!ended) return toast('当前没有可清除的已结束记录');
+    if (!await confirmRisk({ title: '清除已结束记录', description: '该操作只清理下载管理中的历史记录。', confirmLabel: `清除 ${ended} 条记录`, danger: true, items: [{ label: '清理记录', value: `${ended} 条` }, { label: '已下载文件', value: '不删除' }, { label: '曲库歌曲', value: '不删除' }] })) return;
     try {
       const resp = await request('/api/songs/download?all=finished', { method: 'DELETE' });
       toast(`已清除 ${resp.data?.removed || 0} 条记录`);
@@ -2619,6 +2906,10 @@ curl -X POST "${endpoint}" \
 
   $('refreshSources').addEventListener('click', loadSources);
   $('refreshStatus').addEventListener('click', () => { loadStatus(); loadSources(); });
+  $('runDiagnostics').addEventListener('click', runDiagnostics);
+  $('copyDiagnosticReport').addEventListener('click', () => {
+    if (state.diagnostics) copyText(buildDiagnosticReport(state.diagnostics));
+  });
 
   try { state.selected = JSON.parse(localStorage.getItem('neo-lxbridge:selected') || localStorage.getItem('lxbridge:selected') || localStorage.getItem('lxmusic:selected') || '[]'); }
   catch { state.selected = []; }

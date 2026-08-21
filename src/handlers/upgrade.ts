@@ -336,7 +336,7 @@ async function installPrivateFfprobe(): Promise<{ source: 'plugin'; version: str
   }
 }
 
-async function ffprobeStatus(): Promise<{ available: boolean; source: 'system' | 'plugin' | 'none'; version: string; architecture: string; system_available: boolean; system_version: string }> {
+export async function ffprobeStatus(): Promise<{ available: boolean; source: 'system' | 'plugin' | 'none'; version: string; architecture: string; system_available: boolean; system_version: string }> {
   const privateInstalled = await songloft.command.exists(PRIVATE_FFPROBE_NAME);
   const systemVersion = await systemFfprobeVersion();
   try {

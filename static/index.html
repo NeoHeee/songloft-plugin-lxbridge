@@ -40,13 +40,20 @@
           <div class="brand-copy">
             <div class="brand-row">
               <h1>Songloft LxBridge</h1>
-          <span class="version-badge">v1.2.1</span>
+          <span class="version-badge">v1.3.0</span>
             </div>
-            <p>开放音源桥接 · 私人音乐管理</p>
+            <p>汇聚多平台音源 · 焕新私人音乐库</p>
           </div>
         </div>
 
         <div class="topbar-actions">
+          <div id="runtimeStatus" class="runtime-status is-offline" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div class="runtime-copy">
+              <strong class="runtime-title">未检测到可用音源</strong>
+              <p class="runtime-subtitle">搜索和歌词仍然可用</p>
+            </div>
+          </div>
           <div class="theme-picker" role="group" aria-label="界面主题">
             <button class="theme-option" type="button" data-theme-choice="system" title="跟随系统">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
@@ -69,21 +76,6 @@
     </header>
 
     <main>
-      <section class="hero-card" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <span class="eyebrow">SONGLOFT MUSIC SOURCE</span>
-          <h2 id="hero-title">把洛雪生态的音乐，带进你的私人音乐库</h2>
-          <p>汇聚多平台音源，焕新私人音乐库。</p>
-        </div>
-        <div id="runtimeStatus" class="runtime-status is-offline" aria-live="polite">
-          <span class="status-dot" aria-hidden="true"></span>
-          <div class="runtime-copy">
-            <strong class="runtime-title">未检测到可用音源</strong>
-            <p class="runtime-subtitle">搜索和歌词仍然可用</p>
-          </div>
-        </div>
-      </section>
-
       <section id="sourceWarning" class="banner warning hidden" role="status">
         <div class="banner-icon" aria-hidden="true">!</div>
         <div>
@@ -123,6 +115,10 @@
         <button class="tab" type="button" data-tab="sources">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/></svg>
           <span>音源管理</span>
+        </button>
+        <button class="tab" type="button" data-tab="diagnostics">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
+          <span>运行诊断</span>
         </button>
         <button class="tab" type="button" data-tab="settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2.5M12 18.5V21M4.8 7.8l1.8 1.8M17.4 14.4l1.8 1.8M3 12h2.5M18.5 12H21M4.8 16.2l1.8-1.8M17.4 9.6l1.8-1.8"/><circle cx="12" cy="12" r="3.5"/></svg>
@@ -367,12 +363,21 @@
                 <option value="active">进行中</option>
                 <option value="completed">已完成</option>
                 <option value="failed">失败</option>
+                <option value="interrupted">已中断</option>
               </select>
               <button id="refreshDownloads" class="secondary" type="button">刷新</button>
               <button id="clearFinishedDownloads" class="danger-button" type="button">清除已结束记录</button>
             </div>
           </div>
-          <div id="downloadSummary" class="download-summary"></div>
+          <div id="downloadQueueControl" class="download-queue-control ui-step-card" data-step="1" data-state="active">
+            <div class="download-queue-state"><span class="diagnostic-dot"></span><div><strong id="downloadQueueTitle">下载队列运行中</strong><small id="downloadQueueDetail">等待新的下载任务</small></div></div>
+            <div class="download-queue-actions">
+              <button id="toggleDownloadQueue" class="secondary" type="button">暂停队列</button>
+              <button id="selectWaitingDownloads" class="secondary" type="button">选择等待任务</button>
+              <button id="cancelSelectedDownloads" class="danger-button" type="button" disabled>取消已选任务</button>
+            </div>
+          </div>
+          <div id="downloadSummary" class="download-summary ui-status-grid"></div>
           <div id="downloadList" class="download-list">
             <div class="empty-state compact-empty">
               <strong>暂无下载任务</strong>
@@ -397,7 +402,7 @@
           </div>
         </div>
 
-        <div class="card upgrade-step-card">
+        <div id="upgradeStepProbe" class="card upgrade-step-card ui-step-card" data-step="1" data-state="active">
           <div class="section-heading settings-heading">
             <div>
               <span class="section-kicker">步骤 1</span>
@@ -425,7 +430,7 @@
           </details>
         </div>
 
-        <div class="card upgrade-step-card">
+        <div id="upgradeStepRules" class="card upgrade-step-card ui-step-card" data-step="2" data-state="pending">
           <div class="section-heading settings-heading">
             <div>
               <span class="section-kicker">步骤 2</span>
@@ -485,7 +490,7 @@
           </div>
         </div>
 
-        <div class="card upgrade-step-card">
+        <div id="upgradeStepResults" class="card upgrade-step-card ui-step-card" data-step="3" data-state="disabled">
           <div class="section-heading settings-heading row between">
             <div>
               <span class="section-kicker">步骤 3</span>
@@ -664,6 +669,40 @@
         </div>
       </section>
 
+      <section id="tab-diagnostics" class="panel">
+        <div class="card diagnostics-card">
+          <div class="section-heading row between diagnostics-heading">
+            <div>
+              <span class="section-kicker">运行诊断</span>
+              <h2>系统状态与兼容性检查</h2>
+              <p class="muted">检测插件存储、音乐目录、码率工具、音源运行时和集成功能。检测不会播放歌曲，也不会请求第三方音乐平台。</p>
+            </div>
+            <div class="diagnostics-actions">
+              <button id="copyDiagnosticReport" class="secondary" type="button" disabled>复制诊断报告</button>
+              <button id="runDiagnostics" class="primary" type="button">开始检测</button>
+            </div>
+          </div>
+          <div class="diagnostics-privacy-note">
+            <strong>隐私说明</strong>
+            <span>报告不会包含同步密码、访问令牌或完整歌曲列表；目录检测只会创建并立即删除一个临时文件。</span>
+          </div>
+          <div class="diagnostic-flow ui-step-list" aria-label="诊断流程">
+            <div id="diagnosticStepStart" class="ui-step-card" data-step="1" data-state="active"><div class="ui-step-heading"><div><strong>开始检测</strong><small>由用户主动运行，不会自动修改设置</small></div></div></div>
+            <div id="diagnosticStepRun" class="ui-step-card" data-step="2" data-state="pending"><div class="ui-step-heading"><div><strong>检查运行环境</strong><small>存储、目录、音源与集成功能</small></div></div></div>
+            <div id="diagnosticStepReview" class="ui-step-card" data-step="3" data-state="disabled"><div class="ui-step-heading"><div><strong>查看结果</strong><small>先看摘要，需要时展开诊断</small></div></div></div>
+          </div>
+          <div id="diagnosticOverview" class="diagnostic-overview hidden"></div>
+          <div id="diagnosticQueueStatus" class="diagnostic-queue-status hidden"></div>
+          <div id="diagnosticChecks" class="diagnostic-groups">
+            <div class="empty-state compact-empty">
+              <strong>尚未运行诊断</strong>
+              <p>点击“开始检测”，通常几秒内即可完成。</p>
+            </div>
+          </div>
+          <p id="diagnosticGeneratedAt" class="muted diagnostics-generated"></p>
+        </div>
+      </section>
+
       <section id="tab-settings" class="panel">
         <div class="settings-stack">
           <div class="card">
@@ -723,9 +762,9 @@
                 <input id="downloadTargetDir" type="text" list="downloadDirectorySuggestions" placeholder="例如 /LxBridge" autocomplete="off">
                 <datalist id="downloadDirectorySuggestions"></datalist>
               </div>
-              <button id="refreshDownloadDirectories" class="secondary settings-save" type="button">刷新已有目录</button>
+              <button id="refreshDownloadDirectories" class="secondary settings-save" type="button">读取曲库目录</button>
             </div>
-            <small class="field-help download-directory-help">Docker 默认前缀为 <code>/app/music</code>；填写 <code>/LxBridge</code> 时，最终路径为 <code>/app/music/LxBridge</code>。也可以填写完整路径。</small>
+            <small class="field-help download-directory-help">Docker 默认前缀为 <code>/app/music</code>；填写 <code>/LxBridge</code> 时，最终路径为 <code>/app/music/LxBridge</code>。目录建议会标明实际存在或仅来自曲库记录。</small>
             <p id="downloadDirectoryState" class="download-directory-state resolved-path-callout" role="status"></p>
             <div class="download-path-options">
               <label class="check-card">
@@ -1000,6 +1039,21 @@
         <div class="modal-actions">
           <button id="cancelDownloadModal" class="secondary" type="button">取消</button>
           <button id="confirmDownloadModal" class="primary" type="button">继续下载</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="riskConfirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="riskConfirmTitle">
+      <div class="modal-card risk-confirm-card">
+        <div class="modal-header">
+          <div><span class="section-kicker">操作确认</span><h2 id="riskConfirmTitle">确认操作</h2></div>
+          <button id="closeRiskConfirm" class="icon-button modal-close" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p id="riskConfirmDescription" class="muted"></p>
+        <div id="riskConfirmImpact"></div>
+        <div class="modal-actions ui-action-row">
+          <button id="cancelRiskConfirm" class="secondary" type="button">取消</button>
+          <button id="acceptRiskConfirm" class="primary" type="button">确认</button>
         </div>
       </div>
     </div>
