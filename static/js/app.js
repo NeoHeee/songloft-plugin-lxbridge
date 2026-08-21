@@ -1361,6 +1361,54 @@
     formats.classList.remove('hidden');
   }
 
+  function upgradeFailureReasonLabel(reason) {
+    return ({
+      file_not_found: '文件不存在',
+      permission_denied: '无读取权限',
+      invalid_file: '文件异常',
+      probe_unavailable: '探测工具不可用',
+      probe_failed: '探测失败',
+    })[reason] || '探测失败';
+  }
+
+  function renderUpgradeFailureDiagnostics(failures) {
+    if (!failures.length) return '';
+    const grouped = failures.reduce((counts, failure) => {
+      const label = upgradeFailureReasonLabel(failure.reason);
+      counts[label] = (counts[label] || 0) + 1;
+      return counts;
+    }, {});
+    const groups = Object.entries(grouped).map(([label, count]) => `<span>${escapeHtml(label)} <strong>${Number(count)}</strong></span>`).join('');
+    const items = failures.map((failure, index) => {
+      const paths = Array.isArray(failure.attempted_paths) ? failure.attempted_paths : [];
+      const pathItems = paths.map((path, pathIndex) => `<li><span>${pathIndex + 1}.</span><code>${escapeHtml(path)}</code><button type="button" class="mini-button" data-upgrade-copy="${escapeHtml(path)}">复制</button></li>`).join('');
+      return `<details class="upgrade-failure-item"${index === 0 ? ' open' : ''}>
+        <summary><span><strong>${escapeHtml(failure.title || '未知歌曲')}</strong><small>${escapeHtml(failure.artist || '未知歌手')}</small></span><em>${escapeHtml(upgradeFailureReasonLabel(failure.reason))}</em></summary>
+        <div class="upgrade-failure-body">
+          <div class="upgrade-failure-path"><span>数据库路径</span><code>${escapeHtml(failure.file_path || '未记录')}</code>${failure.file_path ? `<button type="button" class="mini-button" data-upgrade-copy="${escapeHtml(failure.file_path)}">复制</button>` : ''}</div>
+          ${pathItems ? `<div class="upgrade-failure-attempts"><span>已尝试位置</span><ol>${pathItems}</ol></div>` : ''}
+          <p><strong>处理建议</strong>${escapeHtml(failure.suggestion || failure.message || '请检查文件路径和读取权限。')}</p>
+        </div>
+      </details>`;
+    }).join('');
+    return `<details class="upgrade-status-details"><summary>查看失败诊断（${failures.length} 首）</summary><div class="upgrade-failure-groups">${groups}</div><div class="upgrade-failure-list">${items}</div></details>`;
+  }
+
+  function renderUpgradeOperationStatus({ tone = 'info', title, description = '', metrics = [], failures = [] }) {
+    const container = $('upgradeScanState');
+    const metricHtml = metrics.length
+      ? `<div class="upgrade-status-metrics">${metrics.map(metric => `<span class="upgrade-status-metric ${escapeHtml(metric.tone || '')}"><strong>${Number(metric.value || 0)}</strong>${escapeHtml(metric.label)}</span>`).join('')}</div>`
+      : '';
+    const detailsHtml = renderUpgradeFailureDiagnostics(failures);
+    container.className = `upgrade-operation-status ${tone}`;
+    container.innerHTML = `<span class="upgrade-status-icon" aria-hidden="true"></span><div class="upgrade-status-content"><strong>${escapeHtml(title)}</strong>${description ? `<p>${escapeHtml(description)}</p>` : ''}${metricHtml}${detailsHtml}</div>`;
+    container.querySelectorAll('[data-upgrade-copy]').forEach(button => button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      copyText(button.dataset.upgradeCopy);
+    }));
+  }
+
   function renderUnknownSongs() {
     const section = $('upgradeUnknownSection');
     const list = $('upgradeUnknownList');
@@ -1396,12 +1444,16 @@
       state.upgradeUnknownTotal = Number(resp.data?.statistics?.bitrate_unknown || state.upgradeUnknownSongs.length);
       state.upgradeCandidates = {};
       state.upgradeSelected = new Set(state.upgradeSongs.map(song => Number(song.id)));
-      $('upgradeScanState').textContent = `找到 ${state.upgradeSongs.length} 首严格低于 ${bitrate} kbps、具有本地路径且码率已识别的歌曲；恰好 ${bitrate} kbps 不计入。`;
+      renderUpgradeOperationStatus({
+        tone: 'success',
+        title: `扫描完成，找到 ${state.upgradeSongs.length} 首待洗版歌曲`,
+        description: `仅包含码率低于 ${bitrate} kbps、具有有效本地路径且码率已识别的歌曲；恰好 ${bitrate} kbps 不计入。`,
+      });
       renderUpgradeStatistics(resp.data?.statistics);
       renderUnknownSongs();
       renderUpgradeSongs();
     } catch (error) {
-      $('upgradeScanState').textContent = `扫描失败：${error.message}`;
+      renderUpgradeOperationStatus({ tone: 'danger', title: '扫描失败', description: error.message });
       renderUpgradeStatistics(null);
       toast(error.message, 6200);
     } finally { setBusy(button, false); }
@@ -1410,7 +1462,7 @@
   async function probeUnknownBitrates() {
     const button = $('probeUnknownBitrates');
     setBusy(button, true, '探测中…');
-    $('upgradeScanState').textContent = '正在低并发读取本地音频信息，请勿重复操作…';
+    renderUpgradeOperationStatus({ tone: 'loading', title: '正在重新探测未知码率', description: '正在低并发读取本地音频信息，请勿重复操作。' });
     try {
       const resp = await request('/api/upgrade/probe-unknown', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1425,13 +1477,22 @@
         : '';
       toast(`探测完成：精确 ${Number(result.exact || 0)} 首，估算 ${Number(result.estimated || 0)} 首${failureHint}`, 6200);
       await scanUpgradeSongs();
-      const firstFailure = Array.isArray(result.failures) && result.failures[0]
-        ? ` 首个失败原因：${result.failures[0].error}`
-        : '';
-      $('upgradeScanState').textContent += ` 本批处理 ${Number(result.processed || 0)} 首：精确 ${Number(result.exact || 0)} 首，估算 ${Number(result.estimated || 0)} 首，失败 ${Number(result.failed || 0)} 首；当前仍有 ${Number(result.remaining || 0)} 首未知。${firstFailure}`;
+      const failed = Number(result.failed || 0);
+      renderUpgradeOperationStatus({
+        tone: failed > 0 ? 'warning' : 'success',
+        title: failed > 0 ? '未知码率复检完成，部分歌曲仍无法识别' : '未知码率复检完成',
+        description: `本批共处理 ${Number(result.processed || 0)} 首歌曲。无法识别的歌曲会继续保留在下方列表中，不会进入洗版队列。`,
+        metrics: [
+          { label: '精确', value: result.exact, tone: 'success' },
+          { label: '估算', value: result.estimated, tone: 'info' },
+          { label: '失败', value: failed, tone: failed > 0 ? 'danger' : '' },
+          { label: '剩余未知', value: result.remaining, tone: Number(result.remaining || 0) > 0 ? 'warning' : '' },
+        ],
+        failures: Array.isArray(result.failures) ? result.failures : [],
+      });
       await loadProbeToolStatus();
     } catch (error) {
-      $('upgradeScanState').textContent = `重新探测失败：${error.message}`;
+      renderUpgradeOperationStatus({ tone: 'danger', title: '重新探测失败', description: error.message });
       toast(error.message, 7200);
     } finally { setBusy(button, false); }
   }
@@ -1506,7 +1567,7 @@
     try {
       for (let index = 0; index < songs.length; index += 1) {
         const song = songs[index];
-        $('upgradeScanState').textContent = `正在批量匹配 ${index + 1}/${songs.length}：《${song.title}》；请求逐首执行并保留安全间隔。`;
+        renderUpgradeOperationStatus({ tone: 'loading', title: `正在批量匹配 ${index + 1}/${songs.length}`, description: `当前歌曲：《${song.title}》。请求将逐首执行并保留安全间隔。` });
         try {
           const candidates = await requestUpgradeCandidates(Number(song.id));
           state.upgradeCandidates[song.id] = candidates;
@@ -1520,7 +1581,7 @@
         renderUpgradeSongs();
         if (index < songs.length - 1) await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      $('upgradeScanState').textContent = `批量匹配完成：${matched} 首已选择匹配分最高的安全候选，${failed} 首没有合格候选。`;
+      renderUpgradeOperationStatus({ tone: failed > 0 ? 'warning' : 'success', title: '批量匹配完成', description: `${matched} 首已选择匹配分最高的安全候选，${failed} 首没有合格候选。` });
       toast(`批量匹配完成：最佳候选 ${matched} 首，无合格候选 ${failed} 首`, 6200);
     } finally {
       setBusy(button, false);
@@ -1537,7 +1598,7 @@
       for (let index = 0; index < songs.length; index += 1) {
         const song = songs[index];
         const candidate = state.upgradeCandidates[song.id][0];
-        $('upgradeScanState').textContent = `正在处理最佳候选 ${index + 1}/${songs.length}：《${song.title}》。`;
+        renderUpgradeOperationStatus({ tone: 'loading', title: `正在处理最佳候选 ${index + 1}/${songs.length}`, description: `当前歌曲：《${song.title}》。` });
         await startDownload(candidate, null, {
           downloadOptions: { target_dir_input: $('upgradeTargetDir').value.trim() || '/LxBridge-Upgrades', create_artist_folder: false, filename_order: 'title_artist' },
           skipConfirm: true,
@@ -1547,7 +1608,7 @@
         });
         setBusy(button, true, `加入 ${index + 1}/${songs.length}`);
       }
-      $('upgradeScanState').textContent = `已处理 ${songs.length} 首最佳候选，下载任务将按照安全间隔串行执行。`;
+      renderUpgradeOperationStatus({ tone: 'success', title: `已处理 ${songs.length} 首最佳候选`, description: '下载任务将按照安全间隔串行执行。' });
       toast(`已将 ${songs.length} 首最佳候选加入安全下载队列`, 6200);
       activateTab('downloads');
       loadDownloads();

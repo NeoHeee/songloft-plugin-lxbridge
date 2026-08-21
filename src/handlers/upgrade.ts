@@ -24,6 +24,33 @@ interface ProbeCacheItem {
   source: 'ffprobe' | 'estimated';
 }
 
+type ProbeFailureReason = 'file_not_found' | 'permission_denied' | 'invalid_file' | 'probe_failed' | 'probe_unavailable';
+
+class AudioProbeError extends Error {
+  constructor(
+    message: string,
+    readonly reason: ProbeFailureReason,
+    readonly attemptedPaths: string[],
+    readonly suggestion: string,
+  ) {
+    super(message);
+    this.name = 'AudioProbeError';
+  }
+}
+
+function classifyProbeError(message: string, hasExistingFile: boolean): { reason: ProbeFailureReason; message: string; suggestion: string } {
+  if (/permission denied|eacces|operation not permitted/i.test(message)) {
+    return { reason: 'permission_denied', message: '音频文件无读取权限', suggestion: '请检查音乐目录的挂载权限，并确保 Songloft 容器具有读取权限。' };
+  }
+  if (!hasExistingFile || /no such file|enoent|not found/i.test(message)) {
+    return { reason: 'file_not_found', message: '未找到可读取的音频文件', suggestion: '请确认文件是否被移动或重命名，并重新扫描 Songloft 音乐库。' };
+  }
+  if (/invalid data|invalid argument|could not find codec|moov atom/i.test(message)) {
+    return { reason: 'invalid_file', message: '文件格式异常或音频已损坏', suggestion: '请尝试在本地播放该文件，必要时重新下载或转换音频格式。' };
+  }
+  return { reason: 'probe_failed', message: 'ffprobe 无法读取音频信息', suggestion: '请确认文件可正常播放；如问题持续，可更新或重新安装 ffprobe。' };
+}
+
 interface ProbeUnknownRequest {
   limit?: number;
   concurrency?: number;
@@ -238,7 +265,8 @@ async function probeSong(song: Song): Promise<ProbeCacheItem> {
       errors.push(`${probePath}: ${errorMessage(error)}`);
     }
   }
-  throw new Error(`所有候选路径均探测失败：${errors.join('；')}`);
+  const diagnostic = classifyProbeError(errors.join('；'), existing.length > 0);
+  throw new AudioProbeError(diagnostic.message, diagnostic.reason, candidates, diagnostic.suggestion);
 }
 
 function estimateSongBitrate(song: Song): ProbeCacheItem | null {
@@ -269,7 +297,9 @@ async function probeSongWithFallback(song: Song): Promise<ProbeCacheItem> {
       const fromFile = estimateSongBitrate({ ...song, file_size: resolved.size } as Song);
       if (fromFile) return { ...fromFile, resolved_path: resolved.path, file_size: resolved.size };
     }
-    throw new Error(`${errorMessage(error)}；未能从音乐目录找到可读取文件或有效文件大小`);
+    if (error instanceof AudioProbeError) throw error;
+    const diagnostic = classifyProbeError(errorMessage(error), Boolean(resolved));
+    throw new AudioProbeError(diagnostic.message, diagnostic.reason, buildAudioPathCandidates(String(song.file_path || '')), diagnostic.suggestion);
   }
 }
 
@@ -395,7 +425,7 @@ export function upgradeHandlers(): {
               ? { status: 'fulfilled', value: estimated } as PromiseFulfilledResult<ProbeCacheItem>
               : { status: 'rejected', reason: new Error(installError || 'ffprobe 不可用，且歌曲缺少文件大小或时长，无法估算') } as PromiseRejectedResult;
           });
-        const failures: Array<{ id: number; title: string; file_path: string; error: string }> = [];
+        const failures: Array<{ id: number; title: string; artist: string; file_path: string; reason: ProbeFailureReason; message: string; attempted_paths: string[]; suggestion: string }> = [];
         let succeeded = 0;
         let exact = 0;
         let estimated = 0;
@@ -407,12 +437,29 @@ export function upgradeHandlers(): {
             if (result.value.source === 'estimated') estimated += 1;
             else exact += 1;
           } else {
-            failures.push({ id: song.id, title: song.title, file_path: String(song.file_path || ''), error: errorMessage(result.reason) });
+            const failure = result.reason instanceof AudioProbeError
+              ? result.reason
+              : new AudioProbeError(
+                tool.available ? errorMessage(result.reason) : 'ffprobe 不可用，且无法根据文件信息估算码率',
+                tool.available ? 'probe_failed' : 'probe_unavailable',
+                buildAudioPathCandidates(String(song.file_path || '')),
+                tool.available ? '请确认文件可正常播放，并检查 ffprobe 运行状态。' : '请重新检测或安装 ffprobe，并确认歌曲具有有效的文件大小和时长。',
+              );
+            failures.push({
+              id: song.id,
+              title: song.title,
+              artist: String(song.artist || ''),
+              file_path: String(song.file_path || ''),
+              reason: failure.reason,
+              message: failure.message,
+              attempted_paths: failure.attemptedPaths,
+              suggestion: failure.suggestion,
+            });
           }
         });
         if (succeeded) await saveProbeCache(cache);
         const remaining = unknown.filter(song => effectiveBitrateKbps(song, cache) <= 0).length;
-        return ok({ processed: batch.length, succeeded, exact, estimated, failed: failures.length, remaining, batch_limit: limit, concurrency, tool, install_error: installError, failures: failures.slice(0, 10) });
+        return ok({ processed: batch.length, succeeded, exact, estimated, failed: failures.length, remaining, batch_limit: limit, concurrency, tool, install_error: installError, failures });
       } catch (error) {
         const message = errorMessage(error);
         const hint = /ffprobe|not found|ENOENT|permission/i.test(message)

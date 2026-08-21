@@ -753,6 +753,48 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
 .upgrade-stat strong { margin-top: 3px; color: var(--text); font-size: 18px; }
 .upgrade-format-summary { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 14px; }
 .upgrade-format-chip { padding: 6px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); color: var(--muted); font-size: 11px; }
+.upgrade-operation-status { display: flex; gap: 11px; align-items: flex-start; margin: 12px 0; padding: 13px 14px; border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--border)); border-radius: 14px; background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface-soft)); }
+.upgrade-status-icon { flex: 0 0 11px; width: 11px; height: 11px; margin-top: 4px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 16%, transparent); }
+.upgrade-status-content { flex: 1 1 auto; min-width: 0; }
+.upgrade-status-content > strong { display: block; color: var(--text); font-size: 13px; }
+.upgrade-status-content > p { margin: 3px 0 0; color: var(--muted-strong); font-size: 12px; line-height: 1.6; }
+.upgrade-operation-status.success { border-color: color-mix(in srgb, var(--green) 34%, var(--border)); background: color-mix(in srgb, var(--green-soft) 64%, var(--surface-soft)); }
+.upgrade-operation-status.success .upgrade-status-icon { background: var(--green); box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 16%, transparent); }
+.upgrade-operation-status.warning { border-color: color-mix(in srgb, var(--warning) 38%, var(--border)); background: color-mix(in srgb, var(--warning-soft) 68%, var(--surface-soft)); }
+.upgrade-operation-status.warning .upgrade-status-icon { background: var(--warning); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 16%, transparent); }
+.upgrade-operation-status.danger { border-color: color-mix(in srgb, var(--danger) 38%, var(--border)); background: color-mix(in srgb, var(--danger-soft) 68%, var(--surface-soft)); }
+.upgrade-operation-status.danger .upgrade-status-icon { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 16%, transparent); }
+.upgrade-operation-status.loading .upgrade-status-icon { animation: pulse-status 1.2s ease-in-out infinite; }
+.upgrade-status-metrics { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.upgrade-status-metric { display: inline-flex; gap: 4px; align-items: baseline; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); color: var(--muted); font-size: 11px; }
+.upgrade-status-metric strong { color: var(--text); font-size: 12px; }
+.upgrade-status-metric.success strong { color: var(--green); }
+.upgrade-status-metric.warning strong { color: var(--warning); }
+.upgrade-status-metric.danger strong { color: var(--danger); }
+.upgrade-status-metric.info strong { color: var(--blue); }
+.upgrade-status-details { margin-top: 9px; border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+.upgrade-status-details > summary { width: fit-content; padding-top: 8px; color: var(--text-soft); font-size: 11px; font-weight: 700; cursor: pointer; }
+.upgrade-failure-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.upgrade-failure-groups span { padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border)); border-radius: 999px; background: var(--surface-raised); color: var(--muted); font-size: 10px; }
+.upgrade-failure-groups strong { color: var(--danger); }
+.upgrade-failure-list { display: grid; gap: 7px; margin-top: 8px; }
+.upgrade-failure-item { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--surface-raised) 82%, transparent); }
+.upgrade-failure-item > summary { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 10px; cursor: pointer; list-style-position: inside; }
+.upgrade-failure-item > summary > span { flex: 1 1 auto; min-width: 0; }
+.upgrade-failure-item > summary strong, .upgrade-failure-item > summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upgrade-failure-item > summary strong { color: var(--text); font-size: 11px; }
+.upgrade-failure-item > summary small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+.upgrade-failure-item > summary em { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; background: var(--danger-soft); color: var(--danger); font-size: 10px; font-style: normal; font-weight: 700; }
+.upgrade-failure-body { display: grid; gap: 9px; padding: 10px; border-top: 1px solid var(--border); }
+.upgrade-failure-path { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.upgrade-failure-path > span, .upgrade-failure-attempts > span { color: var(--muted); font-size: 10px; font-weight: 700; }
+.upgrade-failure-path code, .upgrade-failure-attempts code { min-width: 0; padding: 5px 7px; overflow-x: auto; border-radius: 7px; background: var(--surface-soft); color: var(--text-soft); font-size: 10px; white-space: nowrap; }
+.upgrade-failure-attempts ol { display: grid; gap: 5px; margin: 5px 0 0; padding: 0; list-style: none; }
+.upgrade-failure-attempts li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.upgrade-failure-attempts li > span { color: var(--muted); font-size: 10px; }
+.upgrade-failure-body p { display: flex; gap: 7px; margin: 0; padding: 8px 9px; border-radius: 8px; background: var(--surface-soft); color: var(--muted); font-size: 10px; line-height: 1.5; }
+.upgrade-failure-body p strong { flex: 0 0 auto; color: var(--text-soft); }
+@keyframes pulse-status { 50% { opacity: .38; transform: scale(.82); } }
 .upgrade-song-list { display: grid; gap: 12px; margin-top: 14px; }
 #tab-upgrade, #tab-upgrade > .card, .upgrade-song-list, .upgrade-song-item, .upgrade-song-header, .upgrade-candidates, .upgrade-candidate { min-width: 0; max-width: 100%; box-sizing: border-box; }
 #tab-upgrade > .card { overflow: hidden; }
@@ -870,6 +912,11 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px 
   .probe-tool-alert { flex-basis: 100%; width: 100%; }
   .upgrade-probe-tool-row > button { flex: 1; }
   .upgrade-scan-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .upgrade-operation-status { padding: 12px; }
+  .upgrade-failure-path { grid-template-columns: 1fr auto; }
+  .upgrade-failure-path > span { grid-column: 1 / -1; }
+  .upgrade-failure-attempts li { grid-template-columns: 14px minmax(0, 1fr); }
+  .upgrade-failure-attempts li button { grid-column: 2; justify-self: start; }
   .upgrade-unknown-heading { align-items: flex-start; flex-direction: column; }
   .upgrade-unknown-heading button { width: 100%; }
   .upgrade-unknown-remediation { align-items: stretch; flex-direction: column; }
