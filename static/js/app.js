@@ -165,6 +165,54 @@
     return absolute.pathname + absolute.search + absolute.hash;
   }
 
+  function songloftAudioProxyUrl(url) {
+    const proxy = new URL('/api/v1/proxy', window.location.origin);
+    proxy.searchParams.set('url', String(url || ''));
+    return withAccessToken(proxy.pathname + proxy.search, getAuthToken());
+  }
+
+  function playbackCandidates(resolved) {
+    const directUrl = String(resolved?.url || '').trim();
+    if (!directUrl) return [];
+
+    let protocol = '';
+    try { protocol = new URL(directUrl, window.location.origin).protocol; }
+    catch {}
+
+    const hasCustomHeaders = !!resolved?.headers
+      && typeof resolved.headers === 'object'
+      && Object.keys(resolved.headers).length > 0;
+    const preferProxy = protocol === 'http:' || hasCustomHeaders;
+    const proxyUrl = songloftAudioProxyUrl(directUrl);
+    const ordered = preferProxy
+      ? [{ url: proxyUrl, proxied: true }, { url: directUrl, proxied: false }]
+      : [{ url: directUrl, proxied: false }, { url: proxyUrl, proxied: true }];
+
+    return ordered.filter((candidate, index, items) => (
+      candidate.url && items.findIndex(item => item.url === candidate.url) === index
+    ));
+  }
+
+  async function playResolvedAudio(audio, resolved) {
+    const attempts = playbackCandidates(resolved);
+    const errors = [];
+
+    for (const attempt of attempts) {
+      try {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        audio.src = attempt.url;
+        await audio.play();
+        return attempt;
+      } catch (error) {
+        errors.push(`${attempt.proxied ? 'Songloft 兼容代理' : '音源直连'}：${error?.message || '播放失败'}`);
+      }
+    }
+
+    throw new Error(`音频地址无法播放（${errors.join('；')}）`);
+  }
+
   async function request(path, init = {}) {
     const token = getAuthToken();
     const headers = new Headers(init.headers || {});
@@ -1884,15 +1932,14 @@
       if (!resolved.url) throw new Error('未获取到可播放地址');
       const actualQuality = resolved.actualQuality || requestedQuality;
       item.source_data.quality = actualQuality;
-      audio.src = resolved.url;
-      await audio.play();
+      const playback = await playResolvedAudio(audio, resolved);
       state.playingKey = key;
       state.playingItem = item;
-      updatePlayerDock(item, resolved.url);
+      updatePlayerDock(item, playback.url);
       if (resolved.downgraded) {
         toast(`目标音质 ${requestedQuality} 不可用，已自动降级为 ${actualQuality}`, 5200);
-      } else if (resolved.headers && Object.keys(resolved.headers).length) {
-        toast('该歌曲解析时返回了自定义请求头，浏览器预览可能在少数情况下受限。', 4200);
+      } else if (playback.proxied) {
+        toast('已通过 Songloft 兼容代理播放，适配 App、HTTP 地址及跨域重定向。', 4200);
       }
       renderResults();
     } catch (error) {
